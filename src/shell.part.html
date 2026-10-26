@@ -1,0 +1,298 @@
+<meta charset="utf-8">
+<title>GCC Atlas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a working app. Fixed dark sidebar for navigation, a top bar with global search, one view at a time, and a slide-in panel for records and forms. */
+:root{
+  --bg:#F3F5F7; --surface:#FFFFFF; --sunk:#EDF0F4; --line:#D9DEE5;
+  --fg:#0F1B2D; --muted:#56637A; --accent:#1D4ED8; --accent-soft:#DFE8FC;
+  --side:#0F1B2D; --side-fg:#C3CDDC; --side-hi:#FFFFFF; --side-sel:#1D4ED8;
+  --new:#9A4A06; --new-soft:#FBEBD9; --ok:#1C6B3A; --ok-soft:#DCF1E3; --warn:#7A5600; --warn-soft:#F7EDCC; --bad:#9F1D2B; --bad-soft:#F8DEE1; --star:#C98A00;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D141F; --surface:#151F2E; --sunk:#1C2839; --line:#2A384C;
+  --fg:#E6ECF3; --muted:#9AA8BC; --accent:#7EA6FF; --accent-soft:#1B2B4D;
+  --side:#080D15; --side-fg:#9AA8BC; --side-hi:#FFFFFF; --side-sel:#2A4FBF;
+  --new:#F1A35E; --new-soft:#3A2814; --ok:#6FD39A; --ok-soft:#173424; --warn:#E8C25A; --warn-soft:#3A3115; --bad:#F2808C; --bad-soft:#3D1A20; --star:#F2C14E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D141F; --surface:#151F2E; --sunk:#1C2839; --line:#2A384C;
+  --fg:#E6ECF3; --muted:#9AA8BC; --accent:#7EA6FF; --accent-soft:#1B2B4D;
+  --side:#080D15; --side-fg:#9AA8BC; --side-hi:#FFFFFF; --side-sel:#2A4FBF;
+  --new:#F1A35E; --new-soft:#3A2814; --ok:#6FD39A; --ok-soft:#173424; --warn:#E8C25A; --warn-soft:#3A3115; --bad:#F2808C; --bad-soft:#3D1A20; --star:#F2C14E; color-scheme:dark}
+*{box-sizing:border-box}
+/* views and panels set display, so hidden must win explicitly */
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--sans);font-size:15px;line-height:1.5}
+a{color:var(--accent)}
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.side{background:var(--side);color:var(--side-fg);position:sticky;top:0;height:100vh;padding:calc(18px + env(safe-area-inset-top,0px)) 12px 18px max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:4px}
+.logo{color:var(--side-hi);font-weight:700;font-size:19px;padding:4px 12px 18px;letter-spacing:-.01em}
+.logo span{display:block;font-size:12px;font-weight:400;color:var(--side-fg);letter-spacing:0}
+#nav{display:flex;flex-direction:column;gap:2px}
+#nav button{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;color:var(--side-fg);font-weight:500;white-space:nowrap}
+#nav button:hover{background:rgba(255,255,255,.07);color:var(--side-hi)}
+#nav button[aria-current="true"]{background:var(--side-sel);color:var(--side-hi)}
+#nav button:focus-visible{outline:2px solid var(--side-hi)}
+.count{font-size:12px;background:rgba(255,255,255,.12);border-radius:999px;padding:1px 8px;color:var(--side-hi)}
+.count.hot{background:#E2563B}
+.side-foot{margin-top:auto;font-size:12px;padding:12px;color:var(--side-fg)}
+.ai{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.1)}
+.ai.on{background:#1C6B3A;color:#fff}
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;padding:calc(12px + env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-right,0px)) 12px 24px}
+.search{position:relative;flex:1;max-width:560px}
+.search input{width:100%}
+.gres{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;z-index:30;max-height:420px;overflow:auto}
+.gres button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:12px;width:100%;box-sizing:border-box;padding:9px 10px;border-radius:6px}
+.gres button:hover,.gres button:focus-visible{background:var(--sunk)}
+.content{padding:24px max(24px,env(safe-area-inset-right,0px)) 64px 24px;width:100%;max-width:1280px}
+section[data-view]{display:flex;flex-direction:column;gap:18px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:26px;line-height:1.2;margin:0;letter-spacing:-.01em}
+h2{font-size:17px;margin:0}
+h3{font-size:15px;margin:0}
+p{margin:0}
+.sub{color:var(--muted);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{all:unset;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:2px}
+.kpi:hover{border-color:var(--accent)}
+.kpi .v{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=search],input[type=number],input[type=text],input[type=url],select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-width:0}
+input[type=number]{width:120px}
+.filters input[type=search]{flex:1 1 220px}
+textarea{width:100%;min-height:150px;resize:vertical;line-height:1.55}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:500}
+.btn{font:inherit;font-weight:600;cursor:pointer;border-radius:8px;padding:9px 14px;border:1px solid var(--accent);background:var(--accent);color:#fff;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:transparent}
+.btn:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible,.kpi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:13px;cursor:pointer;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--surface);border-color:var(--fg)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th[data-sort]{cursor:pointer;user-select:none}
+th[data-sort]:hover{color:var(--fg)}
+th .arrow{font-size:10px;margin-left:4px}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody.click tr{cursor:pointer}
+tbody.click tr:hover{background:var(--sunk)}
+.num{font-variant-numeric:tabular-nums}
+.star{all:unset;cursor:pointer;font-size:18px;line-height:1;color:var(--line);padding:2px 4px}
+.star[aria-pressed="true"]{color:var(--star)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.s-operating{background:var(--ok-soft);color:var(--ok)}
+.s-entrant{background:var(--new-soft);color:var(--new)}
+.s-reported{background:var(--warn-soft);color:var(--warn)}
+.s-divested{background:var(--bad-soft);color:var(--bad)}
+.e-documented{background:var(--ok-soft);color:var(--ok)}
+.e-reported{background:var(--accent-soft);color:var(--accent)}
+.e-self{background:var(--sunk);color:var(--muted)}
+.unread{background:#E2563B;color:#fff}
+.feed{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.card.fresh{border-color:var(--new);box-shadow:0 0 0 1px var(--new)}
+.card .top{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}
+.card .why{font-size:13px;background:var(--accent-soft);border-radius:6px;padding:6px 10px}
+.link{all:unset;cursor:pointer;color:var(--accent);font-weight:600}
+.link:hover{text-decoration:underline}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{all:unset;cursor:pointer;display:grid;grid-template-columns:130px minmax(0,1fr) 36px;gap:10px;align-items:center;font-size:13px}
+.bar i{display:block;height:16px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.bar i b{display:block;height:100%;background:var(--accent)}
+.bar:hover i b{filter:brightness(1.15)}
+.bar .n{text-align:right;font-variant-numeric:tabular-nums}
+.cols{display:flex;align-items:flex-end;gap:6px;height:170px;border-bottom:1px solid var(--line);padding-top:16px}
+.cols div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%;font-size:11px;color:var(--muted)}
+.cols b{display:block;width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.cols-l{display:flex;gap:6px;font-size:11px;color:var(--muted);overflow:hidden}
+.cols-l span{flex:1;text-align:center;white-space:nowrap}
+.crow{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr) 64px;gap:12px;align-items:center;font-size:13px}
+.crow .track{height:12px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.crow .track b{display:block;height:100%;background:var(--accent)}
+.crow .v{text-align:right;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px 12px;font-size:14px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.match{padding:12px 14px;border-radius:8px;font-size:14px}
+.match.old{background:var(--accent-soft)}
+.match.new{background:var(--new-soft)}
+blockquote{margin:0;padding:6px 12px;border-left:3px solid var(--line);font-size:13px;color:var(--muted);font-style:italic}
+.city{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 12px;cursor:pointer}
+.city:hover{border-color:var(--accent)}
+.city .rank{font-size:20px;font-weight:700;color:var(--muted)}
+.city.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.city.sel .rank{color:var(--accent)}
+.money{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.money div{background:var(--sunk);border-radius:6px;padding:7px 10px}
+.money span{display:block;font-size:12px;color:var(--muted)}
+.money b{font-variant-numeric:tabular-nums}
+.answer{line-height:1.6}
+.answer ul{margin:6px 0;padding-left:20px}
+.cite{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:0 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.note{font-size:13px;color:var(--muted)}
+.err{color:var(--new);font-size:13px}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+.pol td{font-size:13px}
+.pol ul{margin:0;padding-left:16px}
+details summary{cursor:pointer;font-weight:600}
+form.fm{display:flex;flex-direction:column;gap:12px}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:40;overflow-y:auto;padding:calc(20px + env(safe-area-inset-top,0px)) max(22px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 22px;box-shadow:-12px 0 32px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:16px}
+#scrim{position:fixed;inset:0;background:rgba(10,16,26,.35);z-index:35}
+.dhead{display:flex;justify-content:space-between;gap:12px;align-items:start}
+.tl{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--line);padding-left:14px}
+.tl div{font-size:14px;overflow-wrap:anywhere}
+.tl .d{font-size:12px;color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--surface);padding:10px 18px;border-radius:999px;font-weight:600;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;padding:10px max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px))}
+  .logo{padding:0 12px 0 4px}.logo span,.side-foot{display:none}
+  #nav{flex-direction:row}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .kv{grid-template-columns:minmax(0,1fr)}
+  .money{grid-template-columns:minmax(0,1fr)}
+  .city{grid-template-columns:26px minmax(0,1fr)}
+  .city .cmp{grid-column:2}
+  .topbar,.content{padding-left:16px;padding-right:16px}
+  .bar{grid-template-columns:96px minmax(0,1fr) 30px}
+}
+@media (prefers-reduced-motion:no-preference){.card.fresh{animation:pulse 1.6s ease-out 2}@keyframes pulse{50%{box-shadow:0 0 0 4px var(--new-soft)}}}
+</style>
+
+<div class="app">
+<aside class="side">
+  <div class="logo">GCC Atlas<span>India’s GCC data, with sources</span></div>
+  <div id="nav" role="navigation">
+    <button data-tab="dash">Dashboard</button>
+    <button data-tab="list">Companies <span class="count" id="cList"></span></button>
+    <button data-tab="new">News &amp; alerts <span class="count hot" id="cNew"></span></button>
+    <button data-tab="providers">Providers <span class="count" id="cProv"></span></button>
+    <button data-tab="planner">City planner</button>
+    <button data-tab="add">Add from news</button>
+    <button data-tab="saved">My list <span class="count" id="cSaved"></span></button>
+  </div>
+  <div class="side-foot">Real public data, collected Oct 2026. Your changes are saved in this browser.<br><span class="ai" id="aiBadge">Checking AI…</span></div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="search"><input type="search" id="gq" placeholder="Search companies, providers or cities…" aria-label="Search everything" autocomplete="off"><div class="gres" id="gres" hidden></div></div>
+    <button class="btn" id="addCo">+ Add company</button>
+  </div>
+  <main class="content">
+
+  <section data-view="dash">
+    <div class="head"><div><h1>Dashboard</h1><p class="sub">India’s GCC market at a glance. Click any number or bar to dig in.</p></div></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="panel"><h2>Where the GCCs are</h2><div class="bars" id="chartCity"></div><p class="note">Companies in GCC Atlas by city. Click a bar to see them.</p></div>
+      <div class="panel"><h2>GCC news per month</h2><div class="cols" id="chartMonth"></div><div class="cols-l" id="chartMonthL"></div><p class="note">New centres, expansions, leases and sales, Jan 2025 to Oct 2026.</p></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><div class="head"><h2>Latest news</h2><button class="btn ghost small" data-go="new">See all</button></div><div class="feed" id="latest"></div></div>
+      <div class="panel">
+        <h2>Ask GCC Atlas</h2>
+        <div class="chips" id="askSamples"></div>
+        <div class="filters"><input type="search" id="askQ" aria-label="Your question" placeholder="Ask a question about GCCs in India"><button class="btn" id="askBtn">Ask</button><button class="btn ghost" id="askStop" hidden>Stop</button></div>
+        <div class="answer" id="askOut"><p class="note">Answers use only GCC Atlas data. Click a tag like <span class="cite">G4</span> to open the record.</p></div>
+      </div>
+    </div>
+    <div class="panel"><h2>How many GCCs does India have? Sources disagree</h2><div class="bars" id="counts"></div><p class="note">Some sources count companies, others count centres; none publishes its list. Click a name to open the source.</p></div>
+  </section>
+
+  <section data-view="list" hidden>
+    <div class="head"><div><h1>Companies</h1><p class="sub" id="listCount"></p></div><div class="filters"><button class="btn ghost" id="exportList">Export CSV</button></div></div>
+    <div class="filters">
+      <input type="search" id="q" placeholder="Filter by name, industry, country or city" aria-label="Filter companies">
+      <select id="fCity" aria-label="City"></select>
+      <select id="fSector" aria-label="Industry"></select>
+      <select id="fStatus" aria-label="Status"><option value="">Any status</option><option value="operating">Running</option><option value="entrant">New in 2025–26</option><option value="reported">Reported, not confirmed</option><option value="divested">Sold to an IT firm</option></select>
+    </div>
+    <div class="panel scroll" style="padding:4px 6px"><table>
+      <thead><tr><th style="width:36px"></th><th data-sort="name">Company</th><th data-sort="hq">Based in</th><th data-sort="sector">Industry</th><th data-sort="cities">Cities</th><th data-sort="staff">India staff</th><th data-sort="status">Status</th></tr></thead>
+      <tbody id="regBody" class="click"></tbody>
+    </table></div>
+  </section>
+
+  <section data-view="new" hidden>
+    <div class="head"><div><h1>News &amp; alerts</h1><p class="sub">Companies that opened, grew, moved or sold an India centre, Jan 2025 to Oct 2026.</p></div></div>
+    <div class="panel">
+      <h2>My alerts</h2>
+      <div class="filters"><span class="sub" style="width:84px">I sell</span><div class="chips" id="sigCats"></div></div>
+      <div class="filters"><span class="sub" style="width:84px">My cities</span><div class="chips" id="myCities"></div></div>
+      <div class="filters"><button class="chip" id="onlyMine" aria-pressed="false">Show only my cities</button><select id="sigType" aria-label="What happened"></select><span class="note">Settings are saved for next time.</span></div>
+    </div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section data-view="providers" hidden>
+    <div class="head"><div><h1>Providers</h1><p class="sub">Firms that help companies set up in India, with GCC work backed by public proof.</p></div><button class="btn ghost" id="exportProv">Export CSV</button></div>
+    <div class="kpis" id="provKpis"></div>
+    <div class="filters"><input type="search" id="pq" placeholder="Filter providers" aria-label="Filter providers"><div class="chips" id="provCats"></div></div>
+    <div class="panel scroll" style="padding:4px 6px"><table>
+      <thead><tr><th data-psort="name">Provider</th><th data-psort="cat">Type</th><th data-psort="n">GCC clients with proof</th><th data-psort="best">Strongest proof</th></tr></thead>
+      <tbody id="provBody" class="click"></tbody>
+    </table></div>
+    <p class="note">Proof: <span class="pill e-documented">Official</span> a filing or the client’s own announcement · <span class="pill e-reported">News report</span> · <span class="pill e-self">Provider’s own claim</span>. Providers cannot pay to move up.</p>
+  </section>
+
+  <section data-view="planner" hidden>
+    <div class="head"><div><h1>City planner</h1><p class="sub">Rank cities for a new GCC on talent, office rent and state rent support. Click a city to select it; tick Compare on up to three.</p></div></div>
+    <div class="panel filters" style="flex-direction:row;gap:24px;align-items:flex-end">
+      <label for="pHead">People in year one<input type="number" id="pHead" min="10" max="10000" value="300"></label>
+      <label for="pPri" style="flex:1 1 240px">What matters more?<input type="range" id="pPri" min="0" max="100" value="45"><span class="sub" id="pPriL"></span></label>
+      <label>Smaller cities<span class="chips"><button class="chip" id="pTier2" aria-pressed="false">Include them</button></span></label>
+      <label for="pCity">Jump to a city<select id="pCity"></select></label>
+    </div>
+    <div class="panel" id="compareBox" hidden><div class="head"><h2>Compare cities</h2><button class="btn ghost small" id="clearCmp">Clear</button></div><div class="scroll"><table id="compare"></table></div></div>
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0"><h2>Ranked cities</h2><div class="feed" id="cityList"></div>
+        <p class="note">Rent assumes 100 sq ft per person. State rent support is estimated from each state’s published GCC policy; conditions apply.</p></div>
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div class="panel"><div class="head"><h2>Summary: <span id="briefCity"></span></h2><button class="btn" id="brief">Write summary</button></div><div class="answer" id="briefOut"><p class="note">Get a short note on this city: why it fits, incentives to claim and next steps.</p></div></div>
+        <h2 id="peerHead">Companies already there</h2><div class="feed" id="peerList"></div>
+      </div>
+    </div>
+    <details class="panel"><summary>State incentives: compare 9 state GCC policies</summary>
+      <input type="search" id="polQ" placeholder="Search, for example: rent, salary, training" aria-label="Search incentives">
+      <div class="scroll"><table class="pol"><thead><tr><th>State</th><th>Policy</th><th>Main incentives</th><th>Source</th></tr></thead><tbody id="polBody"></tbody></table></div>
+    </details>
+  </section>
+
+  <section data-view="add" hidden>
+    <div class="head"><div><h1>Add from news</h1><p class="sub">Paste an article about a company opening or growing an India centre. The facts are pulled out, matched to the list, and added when you approve.</p></div></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="filters"><span class="sub">Examples:</span><div class="chips" id="samples"></div></div>
+        <textarea id="doc" aria-label="Article text" placeholder="Paste a news article here"></textarea>
+        <div class="filters"><button class="btn" id="extract">Read the article</button><span class="note" id="extractNote"></span></div>
+      </div>
+      <div class="panel" id="ingestOut"></div>
+    </div>
+  </section>
+
+  <section data-view="saved" hidden>
+    <div class="head"><div><h1>My list</h1><p class="sub">Companies you starred, with your notes. Saved in this browser.</p></div><div class="filters"><button class="btn ghost" id="exportSaved">Export CSV</button><button class="btn danger" id="resetAll">Clear all my changes</button></div></div>
+    <div id="savedBox"></div>
+  </section>
+
+  </main>
+</div>
+</div>
+
+<div id="scrim" hidden></div>
+<aside id="drawer" hidden aria-label="Details"></aside>
+<div id="toast" role="status" hidden></div>
+
+<script id="dataset" type="application/json">__DATASET__</script>
