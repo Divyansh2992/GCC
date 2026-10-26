@@ -4,8 +4,7 @@ A working prototype of a single, trusted source of information on India's Global
 
 A GCC is an office a global company opens in India to run its own work, such as technology, finance or operations. India has about 2,100 of them, but sources disagree on the number and none publishes its list. GCC Atlas joins scattered public information into one list where every fact links to its source.
 
-- **Live version:** https://claude.ai/artifact/G1n16bFcGmNZBD623wd6aw (private until shared)
-- **Pitch deck:** https://claude.ai/artifact/Hb7Sr81sdKQLv1twWBWDca (private until shared)
+**Live version:** https://divyansh2992.github.io/GCC/
 
 ## Run it
 
