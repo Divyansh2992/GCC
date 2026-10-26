@@ -29,9 +29,9 @@ The page is a single self-contained file: the dataset, styles and code are all i
 
 ### AI and basic mode
 
-When the page is opened inside claude.ai, it uses Claude to answer questions, read pasted articles and write the city summary. Answers use only the data in the app and cite the records they rely on.
+When an AI service is connected, the app uses it to answer questions, read pasted articles and write the city summary. Answers use only the data in the app and cite the records they rely on.
 
-Opened anywhere else (for example as a local file), the AI is off and the badge in the sidebar says "basic mode". Every feature still works:
+Without one (for example on GitHub Pages or as a local file), the AI is off and the badge in the sidebar says "basic mode". Every feature still works:
 
 - Ask lists the matching records.
 - Add from news reads articles with simple rules.

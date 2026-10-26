@@ -1,6 +1,5 @@
 <meta charset="utf-8">
 <title>GCC Atlas</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: a working app. Fixed dark sidebar for navigation, a top bar with global search, one view at a time, and a slide-in panel for records and forms. */
@@ -733,12 +732,12 @@ $("#resetAll").onclick=()=>{
   store=BLANK(); persist(); location.reload();
 };
 
-// ---------- AI (Claude, through the page's sample capability) with plain fallbacks ----------
+// ---------- AI (through the host page's sample capability) with plain fallbacks ----------
 let sample=null;
 (window.claude?.use?window.claude.use("sample"):Promise.resolve(null)).then(s=>{
   sample=s; $("#aiBadge").textContent=s?"AI on":"AI off · basic mode"; $("#aiBadge").classList.toggle("on",!!s);
 }).catch(()=>{$("#aiBadge").textContent="AI off · basic mode"});
-const errCopy=c=>({not_granted:"AI was not allowed, so basic mode was used.",rate_limited:"Too many requests. Try again in a minute.",session_expired:"Sign in to Claude again, then retry.",refused:"The AI declined this text.",invalid_json:"The AI reply could not be read, so basic mode was used.",prompt_too_large:"That text is too long. Paste a shorter part."}[c]||"The AI could not finish, so basic mode was used.");
+const errCopy=c=>({not_granted:"AI was not allowed, so basic mode was used.",rate_limited:"Too many requests. Try again in a minute.",session_expired:"Sign in again, then retry.",refused:"The AI declined this text.",invalid_json:"The AI reply could not be read, so basic mode was used.",prompt_too_large:"That text is too long. Paste a shorter part."}[c]||"The AI could not finish, so basic mode was used.");
 function snapshot(){
   const G=GCCS.map(g=>[g.id,g.name,g.hq,g.sector,STATUS[g.status],g.cities.join("/"),g.headcount?g.headcount+" staff ("+(WHO[g.hcType]||"reported")+")":"staff not public"].join("|")).join("\n");
   const E=EVENTS.map(e=>[e.id,e.date,e.gcc,e.company,e.type,e.cityRaw,e.detail].join("|")).join("\n");
@@ -787,7 +786,7 @@ async function ask(){
   const q=$("#askQ").value.trim(); if(!q) return;
   if(!sample){ $("#askOut").innerHTML=basicAnswer(q); return; }
   askCtl=new AbortController(); $("#askBtn").disabled=true; $("#askStop").hidden=false;
-  $("#askOut").innerHTML='<p class="note">Thinking… (the first time, Claude may ask you to allow this page)</p>';
+  $("#askOut").innerHTML='<p class="note">Thinking…</p>';
   const prompt=`You answer questions about Global Capability Centres (GCCs) in India using ONLY the data below.
 Rules: cite each record you use by its id in square brackets, one per bracket, like [G4] or [E2] or [P3]. If the data does not answer the question, say so plainly. Use simple words. At most 150 words. Short bullets if useful. No preamble.
 
@@ -810,7 +809,7 @@ function basicBrief(){
 $("#brief").onclick=async()=>{
   if(!lastPlan) return;
   if(!sample){ $("#briefOut").innerHTML=basicBrief(); return; }
-  const b=$("#brief"); b.disabled=true; $("#briefOut").innerHTML='<p class="note">Writing… (the first time, Claude may ask you to allow this page)</p>';
+  const b=$("#brief"); b.disabled=true; $("#briefOut").innerHTML='<p class="note">Writing…</p>';
   const top=lastPlan.slice(0,3).map(r=>`${r.c.name} (rent ₹${r.c.rent}; year-one rent ${cr(r.annualRent)}; state rent support ${r.sup.amt?cr(r.sup.amt)+"/yr":r.sup.note}; companies already there ${r.peers.map(g=>g.id).join(",")})`).join("; ");
   const prompt=`Write a short, plain-English note for a company planning a GCC in India with ${$("#pHead").value} people in year one, using ONLY the data below. The company is considering ${lastPlan[0].c.name} first.
 Cities: ${top}.
@@ -847,7 +846,7 @@ let pending=null;
 $("#extract").onclick=async()=>{
   const t=$("#doc").value.trim(); if(!t){$("#extractNote").textContent="Paste an article first.";return}
   const btn=$("#extract"); btn.disabled=true; $("#extractNote").textContent="";
-  $("#ingestOut").innerHTML=`<h2>Result</h2><p class="note">${sample?"The AI is reading the article… (the first time, Claude may ask you to allow this page)":"Reading in basic mode…"}</p>`;
+  $("#ingestOut").innerHTML=`<h2>Result</h2><p class="note">${sample?"The AI is reading the article…":"Reading in basic mode…"}</p>`;
   let rec=null, via="basic mode";
   if(sample){
     const prompt=`Read this article about a company and India. Reply with ONLY one JSON object with these keys:
