@@ -1,0 +1,908 @@
+<meta charset="utf-8">
+<title>GCC Atlas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a working app. Fixed dark sidebar for navigation, a top bar with global search, one view at a time, and a slide-in panel for records and forms. */
+:root{
+  --bg:#F3F5F7; --surface:#FFFFFF; --sunk:#EDF0F4; --line:#D9DEE5;
+  --fg:#0F1B2D; --muted:#56637A; --accent:#1D4ED8; --accent-soft:#DFE8FC;
+  --side:#0F1B2D; --side-fg:#C3CDDC; --side-hi:#FFFFFF; --side-sel:#1D4ED8;
+  --new:#9A4A06; --new-soft:#FBEBD9; --ok:#1C6B3A; --ok-soft:#DCF1E3; --warn:#7A5600; --warn-soft:#F7EDCC; --bad:#9F1D2B; --bad-soft:#F8DEE1; --star:#C98A00;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D141F; --surface:#151F2E; --sunk:#1C2839; --line:#2A384C;
+  --fg:#E6ECF3; --muted:#9AA8BC; --accent:#7EA6FF; --accent-soft:#1B2B4D;
+  --side:#080D15; --side-fg:#9AA8BC; --side-hi:#FFFFFF; --side-sel:#2A4FBF;
+  --new:#F1A35E; --new-soft:#3A2814; --ok:#6FD39A; --ok-soft:#173424; --warn:#E8C25A; --warn-soft:#3A3115; --bad:#F2808C; --bad-soft:#3D1A20; --star:#F2C14E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D141F; --surface:#151F2E; --sunk:#1C2839; --line:#2A384C;
+  --fg:#E6ECF3; --muted:#9AA8BC; --accent:#7EA6FF; --accent-soft:#1B2B4D;
+  --side:#080D15; --side-fg:#9AA8BC; --side-hi:#FFFFFF; --side-sel:#2A4FBF;
+  --new:#F1A35E; --new-soft:#3A2814; --ok:#6FD39A; --ok-soft:#173424; --warn:#E8C25A; --warn-soft:#3A3115; --bad:#F2808C; --bad-soft:#3D1A20; --star:#F2C14E; color-scheme:dark}
+*{box-sizing:border-box}
+/* views and panels set display, so hidden must win explicitly */
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--sans);font-size:15px;line-height:1.5}
+a{color:var(--accent)}
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.side{background:var(--side);color:var(--side-fg);position:sticky;top:0;height:100vh;padding:calc(18px + env(safe-area-inset-top,0px)) 12px 18px max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:4px}
+.logo{color:var(--side-hi);font-weight:700;font-size:19px;padding:4px 12px 18px;letter-spacing:-.01em}
+.logo span{display:block;font-size:12px;font-weight:400;color:var(--side-fg);letter-spacing:0}
+#nav{display:flex;flex-direction:column;gap:2px}
+#nav button{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;color:var(--side-fg);font-weight:500;white-space:nowrap}
+#nav button:hover{background:rgba(255,255,255,.07);color:var(--side-hi)}
+#nav button[aria-current="true"]{background:var(--side-sel);color:var(--side-hi)}
+#nav button:focus-visible{outline:2px solid var(--side-hi)}
+.count{font-size:12px;background:rgba(255,255,255,.12);border-radius:999px;padding:1px 8px;color:var(--side-hi)}
+.count.hot{background:#E2563B}
+.side-foot{margin-top:auto;font-size:12px;padding:12px;color:var(--side-fg)}
+.ai{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.1)}
+.ai.on{background:#1C6B3A;color:#fff}
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;padding:calc(12px + env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-right,0px)) 12px 24px}
+.search{position:relative;flex:1;max-width:560px}
+.search input{width:100%}
+.gres{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;z-index:30;max-height:420px;overflow:auto}
+.gres button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:12px;width:100%;box-sizing:border-box;padding:9px 10px;border-radius:6px}
+.gres button:hover,.gres button:focus-visible{background:var(--sunk)}
+.content{padding:24px max(24px,env(safe-area-inset-right,0px)) 64px 24px;width:100%;max-width:1280px}
+section[data-view]{display:flex;flex-direction:column;gap:18px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:26px;line-height:1.2;margin:0;letter-spacing:-.01em}
+h2{font-size:17px;margin:0}
+h3{font-size:15px;margin:0}
+p{margin:0}
+.sub{color:var(--muted);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{all:unset;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:2px}
+.kpi:hover{border-color:var(--accent)}
+.kpi .v{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=search],input[type=number],input[type=text],input[type=url],select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-width:0}
+input[type=number]{width:120px}
+.filters input[type=search]{flex:1 1 220px}
+textarea{width:100%;min-height:150px;resize:vertical;line-height:1.55}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:500}
+.btn{font:inherit;font-weight:600;cursor:pointer;border-radius:8px;padding:9px 14px;border:1px solid var(--accent);background:var(--accent);color:#fff;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:transparent}
+.btn:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible,.kpi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:13px;cursor:pointer;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--surface);border-color:var(--fg)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th[data-sort]{cursor:pointer;user-select:none}
+th[data-sort]:hover{color:var(--fg)}
+th .arrow{font-size:10px;margin-left:4px}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody.click tr{cursor:pointer}
+tbody.click tr:hover{background:var(--sunk)}
+.num{font-variant-numeric:tabular-nums}
+.star{all:unset;cursor:pointer;font-size:18px;line-height:1;color:var(--line);padding:2px 4px}
+.star[aria-pressed="true"]{color:var(--star)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.s-operating{background:var(--ok-soft);color:var(--ok)}
+.s-entrant{background:var(--new-soft);color:var(--new)}
+.s-reported{background:var(--warn-soft);color:var(--warn)}
+.s-divested{background:var(--bad-soft);color:var(--bad)}
+.e-documented{background:var(--ok-soft);color:var(--ok)}
+.e-reported{background:var(--accent-soft);color:var(--accent)}
+.e-self{background:var(--sunk);color:var(--muted)}
+.unread{background:#E2563B;color:#fff}
+.feed{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.card.fresh{border-color:var(--new);box-shadow:0 0 0 1px var(--new)}
+.card .top{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}
+.card .why{font-size:13px;background:var(--accent-soft);border-radius:6px;padding:6px 10px}
+.link{all:unset;cursor:pointer;color:var(--accent);font-weight:600}
+.link:hover{text-decoration:underline}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{all:unset;cursor:pointer;display:grid;grid-template-columns:130px minmax(0,1fr) 36px;gap:10px;align-items:center;font-size:13px}
+.bar i{display:block;height:16px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.bar i b{display:block;height:100%;background:var(--accent)}
+.bar:hover i b{filter:brightness(1.15)}
+.bar .n{text-align:right;font-variant-numeric:tabular-nums}
+.cols{display:flex;align-items:flex-end;gap:6px;height:170px;border-bottom:1px solid var(--line);padding-top:16px}
+.cols div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%;font-size:11px;color:var(--muted)}
+.cols b{display:block;width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.cols-l{display:flex;gap:6px;font-size:11px;color:var(--muted);overflow:hidden}
+.cols-l span{flex:1;text-align:center;white-space:nowrap}
+.crow{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr) 64px;gap:12px;align-items:center;font-size:13px}
+.crow .track{height:12px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.crow .track b{display:block;height:100%;background:var(--accent)}
+.crow .v{text-align:right;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px 12px;font-size:14px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.match{padding:12px 14px;border-radius:8px;font-size:14px}
+.match.old{background:var(--accent-soft)}
+.match.new{background:var(--new-soft)}
+blockquote{margin:0;padding:6px 12px;border-left:3px solid var(--line);font-size:13px;color:var(--muted);font-style:italic}
+.city{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 12px;cursor:pointer}
+.city:hover{border-color:var(--accent)}
+.city .rank{font-size:20px;font-weight:700;color:var(--muted)}
+.city.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.city.sel .rank{color:var(--accent)}
+.money{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.money div{background:var(--sunk);border-radius:6px;padding:7px 10px}
+.money span{display:block;font-size:12px;color:var(--muted)}
+.money b{font-variant-numeric:tabular-nums}
+.answer{line-height:1.6}
+.answer ul{margin:6px 0;padding-left:20px}
+.cite{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:0 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.note{font-size:13px;color:var(--muted)}
+.err{color:var(--new);font-size:13px}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+.pol td{font-size:13px}
+.pol ul{margin:0;padding-left:16px}
+details summary{cursor:pointer;font-weight:600}
+form.fm{display:flex;flex-direction:column;gap:12px}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:40;overflow-y:auto;padding:calc(20px + env(safe-area-inset-top,0px)) max(22px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 22px;box-shadow:-12px 0 32px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:16px}
+#scrim{position:fixed;inset:0;background:rgba(10,16,26,.35);z-index:35}
+.dhead{display:flex;justify-content:space-between;gap:12px;align-items:start}
+.tl{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--line);padding-left:14px}
+.tl div{font-size:14px;overflow-wrap:anywhere}
+.tl .d{font-size:12px;color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--surface);padding:10px 18px;border-radius:999px;font-weight:600;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;padding:10px max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px))}
+  .logo{padding:0 12px 0 4px}.logo span,.side-foot{display:none}
+  #nav{flex-direction:row}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .kv{grid-template-columns:minmax(0,1fr)}
+  .money{grid-template-columns:minmax(0,1fr)}
+  .city{grid-template-columns:26px minmax(0,1fr)}
+  .city .cmp{grid-column:2}
+  .topbar,.content{padding-left:16px;padding-right:16px}
+  .bar{grid-template-columns:96px minmax(0,1fr) 30px}
+}
+@media (prefers-reduced-motion:no-preference){.card.fresh{animation:pulse 1.6s ease-out 2}@keyframes pulse{50%{box-shadow:0 0 0 4px var(--new-soft)}}}
+</style>
+
+<div class="app">
+<aside class="side">
+  <div class="logo">GCC Atlas<span>India’s GCC data, with sources</span></div>
+  <div id="nav" role="navigation">
+    <button data-tab="dash">Dashboard</button>
+    <button data-tab="list">Companies <span class="count" id="cList"></span></button>
+    <button data-tab="new">News &amp; alerts <span class="count hot" id="cNew"></span></button>
+    <button data-tab="providers">Providers <span class="count" id="cProv"></span></button>
+    <button data-tab="planner">City planner</button>
+    <button data-tab="add">Add from news</button>
+    <button data-tab="saved">My list <span class="count" id="cSaved"></span></button>
+  </div>
+  <div class="side-foot">Real public data, collected Oct 2026. Your changes are saved in this browser.<br><span class="ai" id="aiBadge">Checking AI…</span></div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="search"><input type="search" id="gq" placeholder="Search companies, providers or cities…" aria-label="Search everything" autocomplete="off"><div class="gres" id="gres" hidden></div></div>
+    <button class="btn" id="addCo">+ Add company</button>
+  </div>
+  <main class="content">
+
+  <section data-view="dash">
+    <div class="head"><div><h1>Dashboard</h1><p class="sub">India’s GCC market at a glance. Click any number or bar to dig in.</p></div></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="panel"><h2>Where the GCCs are</h2><div class="bars" id="chartCity"></div><p class="note">Companies in GCC Atlas by city. Click a bar to see them.</p></div>
+      <div class="panel"><h2>GCC news per month</h2><div class="cols" id="chartMonth"></div><div class="cols-l" id="chartMonthL"></div><p class="note">New centres, expansions, leases and sales, Jan 2025 to Oct 2026.</p></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><div class="head"><h2>Latest news</h2><button class="btn ghost small" data-go="new">See all</button></div><div class="feed" id="latest"></div></div>
+      <div class="panel">
+        <h2>Ask GCC Atlas</h2>
+        <div class="chips" id="askSamples"></div>
+        <div class="filters"><input type="search" id="askQ" aria-label="Your question" placeholder="Ask a question about GCCs in India"><button class="btn" id="askBtn">Ask</button><button class="btn ghost" id="askStop" hidden>Stop</button></div>
+        <div class="answer" id="askOut"><p class="note">Answers use only GCC Atlas data. Click a tag like <span class="cite">G4</span> to open the record.</p></div>
+      </div>
+    </div>
+    <div class="panel"><h2>How many GCCs does India have? Sources disagree</h2><div class="bars" id="counts"></div><p class="note">Some sources count companies, others count centres; none publishes its list. Click a name to open the source.</p></div>
+  </section>
+
+  <section data-view="list" hidden>
+    <div class="head"><div><h1>Companies</h1><p class="sub" id="listCount"></p></div><div class="filters"><button class="btn ghost" id="exportList">Export CSV</button></div></div>
+    <div class="filters">
+      <input type="search" id="q" placeholder="Filter by name, industry, country or city" aria-label="Filter companies">
+      <select id="fCity" aria-label="City"></select>
+      <select id="fSector" aria-label="Industry"></select>
+      <select id="fStatus" aria-label="Status"><option value="">Any status</option><option value="operating">Running</option><option value="entrant">New in 2025–26</option><option value="reported">Reported, not confirmed</option><option value="divested">Sold to an IT firm</option></select>
+    </div>
+    <div class="panel scroll" style="padding:4px 6px"><table>
+      <thead><tr><th style="width:36px"></th><th data-sort="name">Company</th><th data-sort="hq">Based in</th><th data-sort="sector">Industry</th><th data-sort="cities">Cities</th><th data-sort="staff">India staff</th><th data-sort="status">Status</th></tr></thead>
+      <tbody id="regBody" class="click"></tbody>
+    </table></div>
+  </section>
+
+  <section data-view="new" hidden>
+    <div class="head"><div><h1>News &amp; alerts</h1><p class="sub">Companies that opened, grew, moved or sold an India centre, Jan 2025 to Oct 2026.</p></div></div>
+    <div class="panel">
+      <h2>My alerts</h2>
+      <div class="filters"><span class="sub" style="width:84px">I sell</span><div class="chips" id="sigCats"></div></div>
+      <div class="filters"><span class="sub" style="width:84px">My cities</span><div class="chips" id="myCities"></div></div>
+      <div class="filters"><button class="chip" id="onlyMine" aria-pressed="false">Show only my cities</button><select id="sigType" aria-label="What happened"></select><span class="note">Settings are saved for next time.</span></div>
+    </div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section data-view="providers" hidden>
+    <div class="head"><div><h1>Providers</h1><p class="sub">Firms that help companies set up in India, with GCC work backed by public proof.</p></div><button class="btn ghost" id="exportProv">Export CSV</button></div>
+    <div class="kpis" id="provKpis"></div>
+    <div class="filters"><input type="search" id="pq" placeholder="Filter providers" aria-label="Filter providers"><div class="chips" id="provCats"></div></div>
+    <div class="panel scroll" style="padding:4px 6px"><table>
+      <thead><tr><th data-psort="name">Provider</th><th data-psort="cat">Type</th><th data-psort="n">GCC clients with proof</th><th data-psort="best">Strongest proof</th></tr></thead>
+      <tbody id="provBody" class="click"></tbody>
+    </table></div>
+    <p class="note">Proof: <span class="pill e-documented">Official</span> a filing or the client’s own announcement · <span class="pill e-reported">News report</span> · <span class="pill e-self">Provider’s own claim</span>. Providers cannot pay to move up.</p>
+  </section>
+
+  <section data-view="planner" hidden>
+    <div class="head"><div><h1>City planner</h1><p class="sub">Rank cities for a new GCC on talent, office rent and state rent support. Click a city to select it; tick Compare on up to three.</p></div></div>
+    <div class="panel filters" style="flex-direction:row;gap:24px;align-items:flex-end">
+      <label for="pHead">People in year one<input type="number" id="pHead" min="10" max="10000" value="300"></label>
+      <label for="pPri" style="flex:1 1 240px">What matters more?<input type="range" id="pPri" min="0" max="100" value="45"><span class="sub" id="pPriL"></span></label>
+      <label>Smaller cities<span class="chips"><button class="chip" id="pTier2" aria-pressed="false">Include them</button></span></label>
+      <label for="pCity">Jump to a city<select id="pCity"></select></label>
+    </div>
+    <div class="panel" id="compareBox" hidden><div class="head"><h2>Compare cities</h2><button class="btn ghost small" id="clearCmp">Clear</button></div><div class="scroll"><table id="compare"></table></div></div>
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0"><h2>Ranked cities</h2><div class="feed" id="cityList"></div>
+        <p class="note">Rent assumes 100 sq ft per person. State rent support is estimated from each state’s published GCC policy; conditions apply.</p></div>
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div class="panel"><div class="head"><h2>Summary: <span id="briefCity"></span></h2><button class="btn" id="brief">Write summary</button></div><div class="answer" id="briefOut"><p class="note">Get a short note on this city: why it fits, incentives to claim and next steps.</p></div></div>
+        <h2 id="peerHead">Companies already there</h2><div class="feed" id="peerList"></div>
+      </div>
+    </div>
+    <details class="panel"><summary>State incentives: compare 9 state GCC policies</summary>
+      <input type="search" id="polQ" placeholder="Search, for example: rent, salary, training" aria-label="Search incentives">
+      <div class="scroll"><table class="pol"><thead><tr><th>State</th><th>Policy</th><th>Main incentives</th><th>Source</th></tr></thead><tbody id="polBody"></tbody></table></div>
+    </details>
+  </section>
+
+  <section data-view="add" hidden>
+    <div class="head"><div><h1>Add from news</h1><p class="sub">Paste an article about a company opening or growing an India centre. The facts are pulled out, matched to the list, and added when you approve.</p></div></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="filters"><span class="sub">Examples:</span><div class="chips" id="samples"></div></div>
+        <textarea id="doc" aria-label="Article text" placeholder="Paste a news article here"></textarea>
+        <div class="filters"><button class="btn" id="extract">Read the article</button><span class="note" id="extractNote"></span></div>
+      </div>
+      <div class="panel" id="ingestOut"></div>
+    </div>
+  </section>
+
+  <section data-view="saved" hidden>
+    <div class="head"><div><h1>My list</h1><p class="sub">Companies you starred, with your notes. Saved in this browser.</p></div><div class="filters"><button class="btn ghost" id="exportSaved">Export CSV</button><button class="btn danger" id="resetAll">Clear all my changes</button></div></div>
+    <div id="savedBox"></div>
+  </section>
+
+  </main>
+</div>
+</div>
+
+<div id="scrim" hidden></div>
+<aside id="drawer" hidden aria-label="Details"></aside>
+<div id="toast" role="status" hidden></div>
+
+<script id="dataset" type="application/json">{"meta": {"title": "India Global Capability Centres (GCC) prototype dataset", "compiledOn": "2026-10-25", "method": "Web search of public news, company pages and press releases. Fields are null where no public figure was found in this pass. Headcounts are tagged with headcountType: official (company-stated), press (news report), thirdParty (aggregator/directory estimate). sourceDate is null where the publication date could not be confirmed.", "counts": {"gccs": 40, "events": 22, "providers": 44, "engagements": 19}}, "gccs": [{"id": "walmart-global-tech", "company": "Walmart Global Tech India", "parentCompany": "Walmart Inc.", "parentHqCountry": "United States", "sector": "Retail", "indianEntity": "WM Global Technology Services India Pvt Ltd", "cities": ["Bengaluru", "Chennai", "Gurugram", "Hyderabad", "Pune"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "No official India figure found. Third-party estimate (Revelio Labs) ~14,300 as of Sep 2025. Chennai centre planned for ~4,500.", "yearEstablishedIndia": null, "functions": ["Software engineering", "Data engineering", "AI", "Cloud", "Cybersecurity"], "sources": [{"sourceUrl": "https://english.punjabkesari.com/india/2025/04/17/walmart-expands-in-india-with-new-tech-hub-in-chennai", "sourceTitle": "Walmart expands in India with new tech hub in Chennai", "sourceDate": "2025-04-17"}, {"sourceUrl": "https://www.reveliolabs.com/companies/walmart-global-tech-india/employees", "sourceTitle": "How many employees work at Walmart Global Tech India? (Revelio Labs)", "sourceDate": null}]}, {"id": "target-in-india", "company": "Target in India", "parentCompany": "Target Corporation", "parentHqCountry": "United States", "sector": "Retail", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": 5700, "headcountYear": 2026, "headcountType": "press", "headcountNote": "~5,700 across technology, merchandising, store design, marketing and finance. Separately reported: ~150 layoffs in the 2025 global restructuring.", "yearEstablishedIndia": null, "functions": ["Technology", "Merchandising", "Store design", "Marketing", "Finance"], "sources": [{"sourceUrl": "https://yourstory.com/enterprise-story/2026/08/target-in-india-global-capability-hub", "sourceTitle": "Target in India expands strategic role as global capability hub, says Andrea Zimmerman", "sourceDate": "2026-08"}, {"sourceUrl": "https://www.hrkatha.com/news/40-of-targets-global-tech-workforce-now-based-in-bengaluru/", "sourceTitle": "40% of Target's global tech workforce now based in Bengaluru", "sourceDate": null}]}, {"id": "lowes-india", "company": "Lowe's India", "parentCompany": "Lowe's Companies, Inc.", "parentHqCountry": "United States", "sector": "Retail", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": 4300, "headcountYear": 2023, "headcountType": "press", "headcountNote": "Figure from ANSR case study (50 in 2014, 3,100 in 2022, 4,300 in 2023). Some profiles cite 4,200+.", "yearEstablishedIndia": 2014, "functions": ["Technology", "Analytics", "Merchandising", "Supply chain", "Marketing", "Finance & accounting", "Product management"], "sources": [{"sourceUrl": "https://ansr.com/case-study/retail/stores-supermarket/lowes/", "sourceTitle": "Case Study: How Lowe's Built a GCC That Powers 2000+ Stores Globally (ANSR)", "sourceDate": "2022-02-22"}, {"sourceUrl": "https://allthingstalent.org/tracing-lowes-hr-journey-in-india/2020/04/04/", "sourceTitle": "Tracing Lowe's HR journey in India", "sourceDate": "2020-04-04"}]}, {"id": "tesco-business-solutions", "company": "Tesco Business Solutions / Tesco Bengaluru", "parentCompany": "Tesco PLC", "parentHqCountry": "United Kingdom", "sector": "Retail", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Tesco states TBS has 4,400+ colleagues globally across UK, India, Hungary and Ireland; no India-only figure published. Aggregator estimates conflict (1,625 to 5,000+).", "yearEstablishedIndia": 2004, "functions": ["Shared services", "Finance", "Property", "Trade planning", "Technology"], "sources": [{"sourceUrl": "https://careers.tesco.com/en_GB/careers/JobDetail/149029", "sourceTitle": "Tesco careers - Tesco India Bengaluru job page (company description)", "sourceDate": "2025-09"}]}, {"id": "jpmorgan-chase-india", "company": "JPMorgan Chase India", "parentCompany": "JPMorgan Chase & Co.", "parentHqCountry": "United States", "sector": "BFSI", "indianEntity": null, "cities": ["Mumbai", "Bengaluru", "Hyderabad", "Chennai", "New Delhi", "GIFT City"], "indiaHeadcount": 55000, "headcountYear": null, "headcountType": "press", "headcountNote": "Reuters: ~55,000 people, about a fifth of the global workforce; plans 5-7% annual growth. Publication date not confirmed.", "yearEstablishedIndia": null, "functions": ["Technology", "Operations", "Corporate functions", "Banking"], "sources": [{"sourceUrl": "https://sg.news.yahoo.com/jpmorgan-grow-india-headcount-5-084201003.html", "sourceTitle": "JPMorgan to grow India headcount by 5%-7% for next few years, senior exec says (Reuters)", "sourceDate": null}]}, {"id": "goldman-sachs-india", "company": "Goldman Sachs India", "parentCompany": "The Goldman Sachs Group, Inc.", "parentHqCountry": "United States", "sector": "BFSI", "indianEntity": null, "cities": ["Bengaluru", "Hyderabad"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Hyderabad office opened Oct 2023 with ~1,500 people. An undated report says India grew from ~290 (2004) to 5,000+. No current official total found.", "yearEstablishedIndia": 2004, "functions": ["Engineering", "Operations", "Risk", "Finance"], "sources": [{"sourceUrl": "https://www.peoplematters.in/amp/news/business/goldman-sachs-inaugurates-its-hyderabad-office-with-1500-employees-39161", "sourceTitle": "Goldman Sachs inaugurates its Hyderabad office with 1,500 employees", "sourceDate": "2023-10"}]}, {"id": "wells-fargo-india", "company": "Wells Fargo India", "parentCompany": "Wells Fargo & Company", "parentHqCountry": "United States", "sector": "BFSI", "indianEntity": null, "cities": ["Bengaluru", "Hyderabad", "Chennai (winding down by Q4 FY27)"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Conflicting: People Matters/HR Katha ~10,000; Business Standard (Jul 2025) ~37,000 across three centres. Chennai to be consolidated into Bengaluru/Hyderabad.", "yearEstablishedIndia": null, "functions": ["Technology", "Operations", "Risk", "Analytics"], "sources": [{"sourceUrl": "https://www.hrkatha.com/news/wells-fargo-to-wind-down-chennai-operations-employees-to-relocate/", "sourceTitle": "Wells Fargo to wind down Chennai operations, employees to relocate", "sourceDate": "2025-05-08"}, {"sourceUrl": "https://analyticsindiamag.com/gcc/wells-fargo-cuts-400-jobs-in-india-amid-gcc-pivot-to-innovation-over-scale", "sourceTitle": "Wells Fargo Cuts 400 Jobs in India Amid GCC Pivot to Innovation Over Scale", "sourceDate": "2025-07"}]}, {"id": "american-express-india", "company": "American Express India", "parentCompany": "American Express Company", "parentHqCountry": "United States", "sector": "BFSI", "indianEntity": null, "cities": ["Gurugram", "Delhi", "Mumbai", "Bengaluru", "Chennai", "Pune"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Opened ~1 million sq ft Gurugram campus (Sector 74A) in May 2024, its largest office built from the ground up. Aggregator estimate ~8,000 is unverified.", "yearEstablishedIndia": null, "functions": ["Technology", "Digital banking", "Fraud analytics", "Servicing", "AI CoE"], "sources": [{"sourceUrl": "https://www.businesstoday.in/india/story/american-express-to-open-new-1-million-sq-ft-campus-in-gurugram-428203-2024-05-03", "sourceTitle": "American Express to open new 1 million sq ft campus in Gurugram", "sourceDate": "2024-05-03"}]}, {"id": "standard-chartered-gbs", "company": "Standard Chartered Global Business Services India", "parentCompany": "Standard Chartered PLC", "parentHqCountry": "United Kingdom", "sector": "BFSI", "indianEntity": "Standard Chartered GBS India Private Limited", "cities": ["Chennai", "Bengaluru"], "indiaHeadcount": 21450, "headcountYear": null, "headcountType": "thirdParty", "headcountNote": "Great Place to Work profile states 21,450+; undated and not bank-confirmed. Bengaluru centre opened Oct 2017.", "yearEstablishedIndia": 2000, "functions": ["Operations", "Technology", "Finance", "Risk", "HR"], "sources": [{"sourceUrl": "https://www.greatplacetowork.in/great/company/standard-chartered-gbs-india-private-limited", "sourceTitle": "Standard Chartered GBS India Private Limited (Great Place to Work)", "sourceDate": null}, {"sourceUrl": "https://www.sc.com/en/press-release/post-11064/", "sourceTitle": "Standard Chartered opens GBS centre in Bengaluru (press release)", "sourceDate": "2017-10"}]}, {"id": "hsbc-india", "company": "HSBC India (Global Service Centres & HSBC Technology India)", "parentCompany": "HSBC Holdings plc", "parentHqCountry": "United Kingdom", "sector": "BFSI", "indianEntity": null, "cities": ["Hyderabad", "Bengaluru", "Pune", "Chennai", "Kolkata", "Visakhapatnam", "Gurugram"], "indiaHeadcount": 40000, "headcountYear": 2026, "headcountType": "official", "headcountNote": "HSBC: 'more than 40,000 colleagues in India' (Jul 2026, Bengaluru campus LOI announcement). HSBC Technology India page cites 23,000+ technologists.", "yearEstablishedIndia": null, "functions": ["Operations", "Technology", "Analytics", "Customer services"], "sources": [{"sourceUrl": "https://www.tribuneindia.com/news/business/hsbc-announces-plans-for-integrated-campus-in-bengaluru/", "sourceTitle": "HSBC announces plans for integrated campus in Bengaluru", "sourceDate": "2026-07"}, {"sourceUrl": "https://www.hsbc.com/hti", "sourceTitle": "HSBC Technology India", "sourceDate": null}]}, {"id": "barclays-india", "company": "Barclays India (Global Service Centre)", "parentCompany": "Barclays PLC", "parentHqCountry": "United Kingdom", "sector": "BFSI", "indianEntity": null, "cities": ["Pune", "Chennai", "Noida", "Mumbai"], "indiaHeadcount": 16000, "headcountYear": 2018, "headcountType": "press", "headcountNote": "2018 report: GSC employs 16,000 across Pune, Mumbai, Chennai, Noida. Pune campus to be largest office outside UK. Current figure not found.", "yearEstablishedIndia": null, "functions": ["Technology", "Operations", "Investment banking support"], "sources": [{"sourceUrl": "https://www.theweek.in/news/biz-tech/2018/04/23/barclays-bank-to-have-its-largest-office-space-outside-uk-in-pune.amp.html", "sourceTitle": "Barclays bank to have its largest office space outside UK in Pune", "sourceDate": "2018-04-23"}]}, {"id": "fidelity-international-india", "company": "Fidelity International India", "parentCompany": "Fidelity International (FIL Limited)", "parentHqCountry": "Bermuda / United Kingdom (operational base)", "sector": "BFSI", "indianEntity": null, "cities": ["Gurugram", "Bengaluru", "Mumbai"], "indiaHeadcount": 4500, "headcountYear": 2023, "headcountType": "press", "headcountNote": "4,500+ in 2023; Bengaluru office planned for 700-800 additions. India is its largest location outside the UK. Separate company from US Fidelity Investments (FMR).", "yearEstablishedIndia": null, "functions": ["Technology", "Operations", "Research support", "Client servicing", "Cybersecurity", "Finance", "HR", "Legal"], "sources": [{"sourceUrl": "https://www.peoplematters.in/news/strategic-hr/fidelity-international-to-hire-800-employees-for-new-office-in-bengaluru-india-38551", "sourceTitle": "Fidelity International to hire 800 employees for new office in Bengaluru, India", "sourceDate": "2023"}, {"sourceUrl": "https://careers.fidelityinternational.com/locations/india", "sourceTitle": "Fidelity International careers - India", "sourceDate": null}]}, {"id": "morgan-stanley-india", "company": "Morgan Stanley India", "parentCompany": "Morgan Stanley", "parentHqCountry": "United States", "sector": "BFSI", "indianEntity": null, "cities": ["Mumbai", "Bengaluru"], "indiaHeadcount": 10000, "headcountYear": 2023, "headcountType": "official", "headcountNote": "Company careers page: 'more than 10,000' across Mumbai and Bengaluru. Bengaluru back office opened 2015.", "yearEstablishedIndia": null, "functions": ["Technology", "Operations", "Finance", "Risk"], "sources": [{"sourceUrl": "https://www.morganstanley.com/articles/morgan-stanley-india-grow-your-career", "sourceTitle": "Morgan Stanley India - grow your career", "sourceDate": null}, {"sourceUrl": "https://www.businesstoday.in/latest/corporate/story/morgan-stanley-opens-1400-strong-back-office-in-bangalore-50589-2015-04-15", "sourceTitle": "Morgan Stanley opens 1,400-strong back office in Bangalore", "sourceDate": "2015-04-15"}]}, {"id": "microsoft-idc", "company": "Microsoft India Development Center", "parentCompany": "Microsoft Corporation", "parentHqCountry": "United States", "sector": "Technology", "indianEntity": null, "cities": ["Hyderabad", "Bengaluru", "Noida"], "indiaHeadcount": null, "headcountYear": 2025, "headcountType": "press", "headcountNote": "AIM (2025): ~10,000 Microsoft employees in Hyderabad, about half of the Indian workforce. No official India total found.", "yearEstablishedIndia": 1998, "functions": ["Product engineering", "Cloud", "AI", "Research"], "sources": [{"sourceUrl": "https://news.microsoft.com/source/1998/03/24/microsoft-plans-software-development-center-in-india/", "sourceTitle": "Microsoft Plans Software Development Center in India", "sourceDate": "1998-03-24"}, {"sourceUrl": "https://analyticsindiamagazine.substack.com/p/10000-reasons-microsoft-loves-hyderabad", "sourceTitle": "10,000 reasons Microsoft loves Hyderabad (AIM)", "sourceDate": "2025"}]}, {"id": "google-india", "company": "Google India (engineering)", "parentCompany": "Alphabet Inc.", "parentHqCountry": "United States", "sector": "Technology", "indianEntity": null, "cities": ["Bengaluru", "Hyderabad", "Gurugram", "Mumbai"], "indiaHeadcount": 10000, "headcountYear": 2025, "headcountType": "press", "headcountNote": "Reports at Ananta campus opening: 10,000+ (some cite 11,000+) employees in India. Ananta: 1.6M sq ft, 5,000+ seats.", "yearEstablishedIndia": null, "functions": ["Android", "Search", "Pay", "Cloud", "Maps", "Play", "Google DeepMind"], "sources": [{"sourceUrl": "https://www.business-standard.com/technology/tech-news/google-opens-ananta-campus-in-bengaluru-one-of-its-largest-globally-125021900899_1.html", "sourceTitle": "Google opens Ananta campus in Bengaluru, one of its largest globally", "sourceDate": "2025-02-19"}]}, {"id": "intel-india", "company": "Intel India", "parentCompany": "Intel Corporation", "parentHqCountry": "United States", "sector": "Semiconductors", "indianEntity": null, "cities": ["Bengaluru", "Hyderabad"], "indiaHeadcount": 14000, "headcountYear": 2022, "headcountType": "official", "headcountNote": "Intel careers page: 14,000+ employees (2022), 90% in engineering; largest design & engineering centre outside the US.", "yearEstablishedIndia": null, "functions": ["SoC design", "Validation", "Software", "Graphics", "Data center platforms"], "sources": [{"sourceUrl": "https://www.intel.com/jobs/india/", "sourceTitle": "You Belong at Intel India", "sourceDate": null}]}, {"id": "qualcomm-india", "company": "Qualcomm India", "parentCompany": "Qualcomm Incorporated", "parentHqCountry": "United States", "sector": "Semiconductors", "indianEntity": null, "cities": ["Hyderabad", "Bengaluru", "Chennai", "Noida"], "indiaHeadcount": 17000, "headcountYear": null, "headcountType": "press", "headcountNote": "IANS: 17,000+ in India (date unconfirmed); GlobalData 2022: ~8,700 in Hyderabad. Hyderabad campus announced 2018 (~$400M).", "yearEstablishedIndia": 2004, "functions": ["Chipset R&D", "Software", "Wireless", "Automotive"], "sources": [{"sourceUrl": "https://inc42.com/buzz/qualcomm-to-spend-400-mn-to-setup-hyderabad-campus", "sourceTitle": "Qualcomm To Spend $400 Mn To Setup Hyderabad Campus, Largest Outside US", "sourceDate": "2018"}, {"sourceUrl": "https://www.globaldata.com/media/business-fundamentals/qualcomm-ramps-hiring-hyderabad-observes-globaldata/", "sourceTitle": "Qualcomm ramps hiring in Hyderabad, observes GlobalData", "sourceDate": "2022"}]}, {"id": "amd-india", "company": "AMD India", "parentCompany": "Advanced Micro Devices, Inc.", "parentHqCountry": "United States", "sector": "Semiconductors", "indianEntity": "AMD India Engineering Centre Private Limited (name at 2004 launch)", "cities": ["Bengaluru", "Hyderabad"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Started 2004 with ~40 engineers. Bengaluru Technostar campus is AMD's largest global design centre (designed for ~3,000 engineers). 2023 source: India ~25% of global workforce. No absolute current figure verified.", "yearEstablishedIndia": 2004, "functions": ["Chip design", "Verification", "Software"], "sources": [{"sourceUrl": "https://www.eweek.com/pc-hardware/amd-sets-up-indian-chip-design-center/", "sourceTitle": "AMD Sets Up Indian Chip Design Center (eWeek)", "sourceDate": "2004-04"}, {"sourceUrl": "https://mail.telecomreviewasia.com/news/service-news/3786-amd-inaugurates-largest-global-design-center-in-bengaluru-india", "sourceTitle": "AMD inaugurates largest global design center in Bengaluru, India", "sourceDate": "2023"}]}, {"id": "nxp-india", "company": "NXP India", "parentCompany": "NXP Semiconductors N.V.", "parentHqCountry": "Netherlands", "sector": "Semiconductors", "indianEntity": null, "cities": ["Noida", "Bengaluru", "Hyderabad", "Pune"], "indiaHeadcount": 3000, "headcountYear": 2024, "headcountType": "press", "headcountNote": "Reuters (Sep 2024): ~3,000 employees; plans >$1B R&D investment. Other outlets cite ~4,000 engineers; target 6,000+ in five years.", "yearEstablishedIndia": null, "functions": ["Chip design", "Automotive", "AI", "System design"], "sources": [{"sourceUrl": "https://www.aol.com/news/nxp-semiconductors-invest-more-1-105021810.html", "sourceTitle": "NXP Semiconductors to invest more than $1 billion in India as it boosts R&D efforts (Reuters)", "sourceDate": "2024-09"}, {"sourceUrl": "https://www.outlookbusiness.com/start-up/news/nxp-semiconductors-will-double-its-workforce-in-india-to-over-6000-in-five-years-says-chief-executive-kurt-sievers", "sourceTitle": "NXP will double its workforce in India to over 6,000 in five years", "sourceDate": "2024-09"}]}, {"id": "texas-instruments-india", "company": "Texas Instruments India", "parentCompany": "Texas Instruments Incorporated", "parentHqCountry": "United States", "sector": "Semiconductors", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Coverage says 'thousands' of employees; no exact figure. First MNC to set up R&D centre in India (1985). New 550,000 sq ft R&D centre opened Feb 2026.", "yearEstablishedIndia": 1985, "functions": ["Analog & embedded chip design", "Reliability labs", "Product R&D"], "sources": [{"sourceUrl": "https://ianslive.in/texas-instruments-true-pioneer-in-indias-semiconductor-journey-ashwini-vaishnaw--20260207163314", "sourceTitle": "Texas Instruments true pioneer in India's semiconductor journey: Ashwini Vaishnaw (IANS)", "sourceDate": "2026-02-07"}]}, {"id": "bosch-bgsw", "company": "Bosch Global Software Technologies", "parentCompany": "Robert Bosch GmbH", "parentHqCountry": "Germany", "sector": "Automotive / Engineering", "indianEntity": "Bosch Global Software Technologies Private Limited", "cities": ["Bengaluru", "Coimbatore", "Hyderabad"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Job listings cite 28,200+ associates for BGSW (likely global, not India-only). Hyderabad centre (2022) planned up to 3,000 hires by 2025.", "yearEstablishedIndia": null, "functions": ["Automotive software", "Embedded systems", "IoT", "Enterprise IT"], "sources": [{"sourceUrl": "https://www.marklines.com/en/news/264986", "sourceTitle": "Bosch Global Software Technologies to set up facility in Hyderabad, India", "sourceDate": "2022"}, {"sourceUrl": "https://analyticsindiamag.com/ai-news-updates/bosch-global-software-technologies-opens-new-office-in-bengalurus-electronic-city", "sourceTitle": "Bosch Global Software Technologies opens new office in Bengaluru's Electronic City", "sourceDate": null}]}, {"id": "mbrdi", "company": "Mercedes-Benz Research and Development India (MBRDI)", "parentCompany": "Mercedes-Benz Group AG", "parentHqCountry": "Germany", "sector": "Automotive / Engineering", "indianEntity": "Mercedes-Benz Research and Development India Pvt Ltd", "cities": ["Bengaluru", "Pune"], "indiaHeadcount": 7000, "headcountYear": 2023, "headcountType": "press", "headcountNote": "2023 interview: 7,000+ employees plus ~4,000 contractors. Other sources cite 5,600 to 9,156; definitions vary. Largest R&D centre outside Germany.", "yearEstablishedIndia": 1996, "functions": ["Software-defined vehicle (MB.OS)", "Digital engineering", "IT", "Autonomous driving"], "sources": [{"sourceUrl": "https://autocarpro.in/interview/mbrdis-biggest-strength-lies-in-digital-development-of-cars-manu-saale-113905", "sourceTitle": "'MBRDI's biggest strength lies in digital development of cars': Manu Saale", "sourceDate": "2023"}, {"sourceUrl": "https://group.mercedes-benz.com/careers/about-us/locations/location-detail-page-18185.html", "sourceTitle": "Mercedes-Benz careers - Bangalore location page", "sourceDate": null}]}, {"id": "continental-tci", "company": "Continental Technical Center India", "parentCompany": "Continental AG", "parentHqCountry": "Germany", "sector": "Automotive / Engineering", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": 5000, "headcountYear": 2022, "headcountType": "press", "headcountNote": "At Nov 2022 campus opening (Electronic City Phase II, ~INR 1,000 cr, capacity 6,500+): ~5,000 employees.", "yearEstablishedIndia": 2009, "functions": ["Automotive software", "Electronics R&D", "Engineering services"], "sources": [{"sourceUrl": "https://mobilityoutlook.com/news/continental-opens-new-campus-for-its-technical-center-india", "sourceTitle": "Continental Opens New Campus For Its Technical Center India", "sourceDate": "2022-11"}, {"sourceUrl": "https://www.continental.com/en/press/press-releases/20221123-automotive-india/", "sourceTitle": "Continental press release - Technical Center India campus", "sourceDate": "2022-11-23"}]}, {"id": "caterpillar-india", "company": "Caterpillar India Engineering & Design Center", "parentCompany": "Caterpillar Inc.", "parentHqCountry": "United States", "sector": "Automotive / Engineering", "indianEntity": "Caterpillar India Pvt Ltd", "cities": ["Chennai", "Bengaluru"], "indiaHeadcount": 3200, "headcountYear": null, "headcountType": "official", "headcountNote": "Caterpillar page: 3,200+ engineers in India R&D, its second-largest engineer concentration globally. Press estimates up to 3,500-5,000.", "yearEstablishedIndia": 2002, "functions": ["Product design", "Virtual validation", "Telematics", "Autonomy", "Engineering analytics"], "sources": [{"sourceUrl": "https://caterpillar.com/en/company/global-footprint/apd/india/innovation.html", "sourceTitle": "Caterpillar - India Engineering and Design Center", "sourceDate": null}]}, {"id": "john-deere-jdtci", "company": "John Deere Technology Centre India", "parentCompany": "Deere & Company", "parentHqCountry": "United States", "sector": "Automotive / Engineering", "indianEntity": "John Deere India Private Limited", "cities": ["Pune"], "indiaHeadcount": 3125, "headcountYear": 2021, "headcountType": "thirdParty", "headcountNote": "Great Place to Work profile (2021): 3,125 India-based employees. Other aggregators conflict.", "yearEstablishedIndia": 2005, "functions": ["IT", "Product engineering", "Manufacturing engineering", "Embedded systems", "Technical authoring"], "sources": [{"sourceUrl": "https://www.greatplacetowork.in/great/company/john-deere-enterprise-technology-engineering-center", "sourceTitle": "John Deere Enterprise Technology & Engineering Center (Great Place to Work)", "sourceDate": "2021"}, {"sourceUrl": "https://deere.com/en/news/all-news/john-deere-25-year-success-in-india", "sourceTitle": "John Deere 25 years in India (news release)", "sourceDate": "2023-02-22"}]}, {"id": "boeing-bietc", "company": "Boeing India Engineering & Technology Center (BIETC)", "parentCompany": "The Boeing Company", "parentHqCountry": "United States", "sector": "Aerospace / Engineering", "indianEntity": null, "cities": ["Bengaluru", "Chennai"], "indiaHeadcount": 5500, "headcountYear": 2024, "headcountType": "press", "headcountNote": "5,500+ engineers across Bengaluru and Chennai. 43-acre Rs 1,600 cr Devanahalli campus inaugurated Jan 2024.", "yearEstablishedIndia": null, "functions": ["Aerospace engineering", "Test & evaluation", "R&T", "IT", "Digital analytics"], "sources": [{"sourceUrl": "https://www.pmindia.gov.in/en/news_updates/pm-inaugurates-new-state-of-the-art-boeing-india-engineering-technology-center-campus-in-bengaluru-karnataka/", "sourceTitle": "PM inaugurates new Boeing India Engineering & Technology Center campus in Bengaluru", "sourceDate": "2024-01-19"}]}, {"id": "airbus-india", "company": "Airbus India Technology Centre", "parentCompany": "Airbus SE", "parentHqCountry": "Netherlands (registered) / France (operational HQ)", "sector": "Aerospace / Engineering", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "New ~880,000 sq ft campus (Mar 2026) designed for ~5,000; current headcount not reported.", "yearEstablishedIndia": null, "functions": ["Aircraft engineering", "Digital", "Customer services", "Procurement", "AI", "Cybersecurity"], "sources": [{"sourceUrl": "https://www.theweek.in/news/biz-tech/2026/03/07/airbus-technology-and-digital-innovation-centre-bengaluru.amp.html", "sourceTitle": "Airbus sets up its largest technology and digital innovation centre outside Europe in Bengaluru", "sourceDate": "2026-03-07"}]}, {"id": "shell-india", "company": "Shell India (Technology Centre Bengaluru & Business Operations Chennai)", "parentCompany": "Shell plc", "parentHqCountry": "United Kingdom", "sector": "Energy", "indianEntity": null, "cities": ["Bengaluru", "Chennai"], "indiaHeadcount": 4300, "headcountYear": 2015, "headcountType": "press", "headcountNote": "Launch-era figure (~2015-16) of 4,300 across Bengaluru P&T/IT and Chennai BOC; dated. Shell site lists Chennai Financial Operations 2,000+.", "yearEstablishedIndia": null, "functions": ["Projects & technology R&D", "IT", "Financial operations", "Technical asset support"], "sources": [{"sourceUrl": "https://www.businessinsider.in/coming-up-the-shell-it-centre-bengaluru/articleshow/47552388.cms", "sourceTitle": "Coming up! The Shell IT Centre Bengaluru", "sourceDate": "2015-06"}, {"sourceUrl": "https://www.shell.in/about-us/what-we-do/capability-centres.html", "sourceTitle": "Shell India - capability centres", "sourceDate": null}]}, {"id": "hitachi-energy-india", "company": "Hitachi Energy India (Indian Operations Centre / global technology centre)", "parentCompany": "Hitachi Energy Ltd (Hitachi, Ltd.)", "parentHqCountry": "Switzerland (Hitachi Energy) / Japan (Hitachi)", "sector": "Energy", "indianEntity": null, "cities": ["Chennai", "Bengaluru", "Gurugram"], "indiaHeadcount": 7500, "headcountYear": null, "headcountType": "official", "headcountNote": "7,500+ employees in India including factories (not GCC-only). Operations centre job postings cite ~2,600-3,000+ engineers. GCCs in Hyderabad and Pune planned.", "yearEstablishedIndia": null, "functions": ["Engineering operations", "Shared services", "Technology & innovation"], "sources": [{"sourceUrl": "https://www.hitachienergy.com/in/en/about-us/hitachi-energy-india", "sourceTitle": "Hitachi Energy India", "sourceDate": null}]}, {"id": "astrazeneca-gitc", "company": "AstraZeneca Global Innovation and Technology Centre", "parentCompany": "AstraZeneca PLC", "parentHqCountry": "United Kingdom", "sector": "Pharma / Health", "indianEntity": "AstraZeneca India Private Limited", "cities": ["Chennai", "Bengaluru"], "indiaHeadcount": 2500, "headcountYear": 2025, "headcountType": "press", "headcountNote": "2,500+ across India R&D, tech and commercial (Digital Health News). Jul 2024: Rs 250 cr expansion, ~1,300 roles; 334,000 sq ft at Ramanujan IT City.", "yearEstablishedIndia": null, "functions": ["AI/ML", "Data science", "Supply chain analytics", "Technology"], "sources": [{"sourceUrl": "https://www.biospectrumindia.com/news/86/24867/astrazeneca-to-invest-rs-250-cr-to-grow-global-innovation-and-technology-centre-in-india.html", "sourceTitle": "AstraZeneca to invest Rs 250 Cr to grow Global Innovation and Technology Centre in India", "sourceDate": "2024-07"}, {"sourceUrl": "https://www.digitalhealthnews.com/astrazeneca-to-invest-inr-176-cr-to-expand-global-innovation-technology-center-in-chennai", "sourceTitle": "AstraZeneca to invest INR 176 Cr to expand Global Innovation & Technology Center in Chennai", "sourceDate": "2025"}]}, {"id": "novartis-hyderabad", "company": "Novartis Corporate Center Hyderabad (NOCC)", "parentCompany": "Novartis AG", "parentHqCountry": "Switzerland", "sector": "Pharma / Health", "indianEntity": null, "cities": ["Hyderabad", "Mumbai"], "indiaHeadcount": 9000, "headcountYear": null, "headcountType": "press", "headcountNote": "Secondary coverage: 9,000+ in Hyderabad (~11% of global workforce), second only to Basel. Not confirmed by a Novartis primary source in this pass.", "yearEstablishedIndia": null, "functions": ["Clinical operations", "Biostatistics", "Regulatory affairs", "Analytics", "Corporate services"], "sources": [{"sourceUrl": "https://www.m9.news/politics/novartis-biggest-global-rd-corporate-hub-hyderabad/", "sourceTitle": "Novartis Sets Up Biggest R&D, Corporate Hub in Hyd", "sourceDate": null}, {"sourceUrl": "https://www.novartis.com/in-en/about/development", "sourceTitle": "Novartis - Development Hub in India", "sourceDate": null}]}, {"id": "gsk-gcc-bengaluru", "company": "GSK Global Capability Centre India", "parentCompany": "GSK plc", "parentHqCountry": "United Kingdom", "sector": "Pharma / Health", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "No public headcount found for the GCC.", "yearEstablishedIndia": null, "functions": ["Data & analytics", "Master data management", "Technology"], "sources": [{"sourceUrl": "https://gsk.com/en-gb/careers/our-global-and-regional-hubs", "sourceTitle": "GSK - Our global and regional hubs", "sourceDate": null}, {"sourceUrl": "https://india-pharma.gsk.com/en-in/company/discover-gsk-in-india/", "sourceTitle": "Discover GSK in India", "sourceDate": null}]}, {"id": "philips-india", "company": "Philips Innovation Campus", "parentCompany": "Koninklijke Philips N.V.", "parentHqCountry": "Netherlands", "sector": "Pharma / Health (HealthTech)", "indianEntity": null, "cities": ["Bengaluru", "Pune", "Chennai", "Gurugram"], "indiaHeadcount": 9000, "headcountYear": 2023, "headcountType": "official", "headcountNote": "~9,000 employees in India (Nov 2023). New Yelahanka campus (INR 500 cr) to house 5,000+.", "yearEstablishedIndia": null, "functions": ["HealthTech software R&D", "Product engineering"], "sources": [{"sourceUrl": "https://www.philips.co.in/about/news-and-insights/press-release/philips-inaugurates-new-innovation-campus-in-yelahanka-bengaluru", "sourceTitle": "Philips inaugurates new innovation campus in Yelahanka, Bengaluru", "sourceDate": "2023-11"}]}, {"id": "siemens-healthineers-india", "company": "Siemens Healthineers Development Center Bengaluru", "parentCompany": "Siemens Healthineers AG", "parentHqCountry": "Germany", "sector": "Pharma / Health (HealthTech)", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Bengaluru holds ~50% of the company's software engineers (2020). New campus (Rs 1,300 cr) planned for ~5,000 people; current count not reported.", "yearEstablishedIndia": null, "functions": ["Healthcare software R&D", "Manufacturing", "Platforms"], "sources": [{"sourceUrl": "https://www.siemens-healthineers.com/press/releases/bengaluru2020.html", "sourceTitle": "Siemens Healthineers press release - Bengaluru innovation hub", "sourceDate": "2020-10-20"}]}, {"id": "maersk-gsc-india", "company": "Maersk Global Service Centres India", "parentCompany": "A.P. Moller - Maersk A/S", "parentHqCountry": "Denmark", "sector": "Logistics", "indianEntity": null, "cities": ["Chennai", "Pune", "Mumbai", "Bengaluru"], "indiaHeadcount": 8000, "headcountYear": null, "headcountType": "official", "headcountNote": "Maersk statement: India hosts its largest GSC operations with 8,000+ professionals (undated, 30-years-in-India coverage).", "yearEstablishedIndia": null, "functions": ["Customer service", "Finance", "Operations", "Technology"], "sources": [{"sourceUrl": "https://www.maritimegateway.com/maersk-celebrates-30-years-india/", "sourceTitle": "Maersk celebrates 30 years in India", "sourceDate": null}]}, {"id": "unilever-bangalore-hub", "company": "Unilever Bangalore Hub (UniOps)", "parentCompany": "Unilever PLC", "parentHqCountry": "United Kingdom", "sector": "Consumer", "indianEntity": null, "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Aggregator estimate ~5,000 unverified. Founding year conflicts (2006 vs 2010).", "yearEstablishedIndia": null, "functions": ["Business services", "Technology", "Finance (P2P)", "Master data"], "sources": [{"sourceUrl": "https://www.storyboard18.com/brand-makers/indias-global-capability-centers-the-mvps-of-the-future-rohit-jawa-46381.htm", "sourceTitle": "India's Global Capability Centers: The MVPs of the future - Rohit Jawa", "sourceDate": null}]}, {"id": "pepsico-gbs-india", "company": "PepsiCo Global Business Services India", "parentCompany": "PepsiCo, Inc.", "parentHqCountry": "United States", "sector": "Consumer", "indianEntity": null, "cities": ["Hyderabad", "Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "2020: Hyderabad hub to be largest outside US, 2,500 hires over 3 years. Aggregator ~4,500 unverified.", "yearEstablishedIndia": null, "functions": ["Finance", "HR", "Supply chain", "Marketing", "Insights", "Sales", "Technology"], "sources": [{"sourceUrl": "https://www.just-food.com/news/pepsico-lines-up-business-hub-for-india", "sourceTitle": "PepsiCo lines up business hub for India", "sourceDate": "2020"}]}, {"id": "ericsson-india-rd", "company": "Ericsson India R&D", "parentCompany": "Telefonaktiebolaget LM Ericsson", "parentHqCountry": "Sweden", "sector": "Telecom", "indianEntity": null, "cities": ["Chennai", "Bengaluru", "Gurugram"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "No current India R&D total found. Bengaluru expanding into ASIC and RAN software; Chennai hosts 6G team.", "yearEstablishedIndia": null, "functions": ["5G/6G R&D", "RAN software", "ASIC design", "Cloud"], "sources": [{"sourceUrl": "https://telcomagazine.com/news/ericsson-expands-bengaluru-r-d-centre-for-5g-and-ai", "sourceTitle": "Ericsson expands Bengaluru R&D centre for 5G and AI", "sourceDate": null}]}, {"id": "nokia-india-rd", "company": "Nokia India R&D", "parentCompany": "Nokia Oyj", "parentHqCountry": "Finland", "sector": "Telecom", "indianEntity": null, "cities": ["Bengaluru", "Chennai", "Noida"], "indiaHeadcount": 9000, "headcountYear": 2024, "headcountType": "official", "headcountNote": "Nokia brochure (Apr 2024): India is its largest global R&D base, 9,000+ engineers; Bengaluru 8,000+, Chennai fixed networks 1,000+.", "yearEstablishedIndia": null, "functions": ["5G/6G", "Cloud", "AI/ML", "Fixed networks"], "sources": [{"sourceUrl": "https://www.nokia.com/sites/default/files/2024-04/nokia-making-in-india-for-india-and-the-world_18_april_2024.pdf", "sourceTitle": "Nokia - Making in India for India and the World", "sourceDate": "2024-04-18"}]}, {"id": "abb-india-gcc", "company": "ABB Global Industries and Services", "parentCompany": "ABB Ltd", "parentHqCountry": "Switzerland", "sector": "Automotive / Engineering (Industrial)", "indianEntity": "ABB Global Industries and Services Pvt. Ltd.", "cities": ["Bengaluru"], "indiaHeadcount": null, "headcountYear": null, "headcountType": null, "headcountNote": "Figures conflict (2,200 on AmbitionBox; 5,000-10,000 on aggregator). Entity name per ABB India exchange filing.", "yearEstablishedIndia": null, "functions": ["Finance", "HR", "Information systems", "Industrial software", "R&D (INCRC)"], "sources": [{"sourceUrl": "https://bseindia.com/xml-data/corpfiling/AttachHis/27600acf-563d-4525-a74e-f82e60ab3342.pdf", "sourceTitle": "ABB India exchange filing listing group entities", "sourceDate": null}]}], "events": [{"id": "ev-google-ananta", "company": "Google", "hqCountry": "United States", "eventType": "expansion", "city": "Bengaluru", "date": "2025-02-19", "detail": "Opened Ananta campus, ~1.6M sq ft, 5,000+ seats; one of Google's largest offices globally.", "sourceUrl": "https://www.business-standard.com/technology/tech-news/google-opens-ananta-campus-in-bengaluru-one-of-its-largest-globally-125021900899_1.html", "sourceTitle": "Google opens Ananta campus in Bengaluru, one of its largest globally", "sourceDate": "2025-02-19"}, {"id": "ev-lilly-hyderabad", "company": "Eli Lilly and Company", "hqCountry": "United States", "eventType": "new GCC", "city": "Hyderabad", "date": "2025-01", "detail": "Lilly Capability Centre India (LCCI) Hyderabad, second India site after Bengaluru (2016); 1,000+ hires; inaugurated Aug 2025.", "sourceUrl": "https://www.indianpharmapost.com/news/lilly-to-establish-new-global-capability-centre-in-hyderabad-16647", "sourceTitle": "Lilly to establish new global capability centre in Hyderabad", "sourceDate": "2025-01"}, {"id": "ev-mcdonalds-hyderabad", "company": "McDonald's", "hqCountry": "United States", "eventType": "new GCC", "city": "Hyderabad", "date": "2025-03-20", "detail": "MoU with Telangana for GCC; ~2,000 hires planned; later opened at HITEC City (reported 1.56 lakh sq ft, 1,200+ roles).", "sourceUrl": "https://www.newsonair.gov.in/telangana-signs-mou-with-mcdonalds-to-establish-global-capability-centre-in-hyderabad", "sourceTitle": "Telangana signs MoU with McDonald's to establish Global Capability Centre in Hyderabad", "sourceDate": "2025-03-20"}, {"id": "ev-walmart-chennai", "company": "Walmart Global Tech", "hqCountry": "United States", "eventType": "lease", "city": "Chennai", "date": "2025-04-17", "detail": "~465,000 sq ft at International Tech Park Chennai for ~4,500 staff; 60-month lease from Jan 1 2025; ~Rs 3.26 cr monthly rent.", "sourceUrl": "https://english.punjabkesari.com/india/2025/04/17/walmart-expands-in-india-with-new-tech-hub-in-chennai", "sourceTitle": "Walmart expands in India with new tech hub in Chennai", "sourceDate": "2025-04-17"}, {"id": "ev-wellsfargo-chennai", "company": "Wells Fargo", "hqCountry": "United States", "eventType": "consolidation", "city": "Chennai -> Bengaluru/Hyderabad", "date": "2025-05-08", "detail": "Chennai GCC to wind down; staff offered relocation; transition complete by Q4 FY27.", "sourceUrl": "https://www.hrkatha.com/news/wells-fargo-to-wind-down-chennai-operations-employees-to-relocate/", "sourceTitle": "Wells Fargo to wind down Chennai operations, employees to relocate", "sourceDate": "2025-05-08"}, {"id": "ev-heineken-hyderabad", "company": "HEINEKEN", "hqCountry": "Netherlands", "eventType": "new GCC", "city": "Hyderabad", "date": "2025-07", "detail": "First APAC GCC, 76,000 sq ft in Financial District; 300+ jobs initially, rising to ~1,600; opened Oct 2025.", "sourceUrl": "https://www.peoplematters.in/news/business/heineken-to-set-up-its-first-global-capability-center-in-hyderabad-42281", "sourceTitle": "HEINEKEN to set up its first Global Capability Center in Hyderabad", "sourceDate": "2025-07"}, {"id": "ev-costco-hyderabad", "company": "Costco Wholesale", "hqCountry": "United States", "eventType": "new GCC (reported)", "city": "Hyderabad", "date": "2025-07", "detail": "Reuters (anonymous sources): first India tech hub, ~1,000 staff initially. Not officially confirmed by Costco at time of report.", "sourceUrl": "https://www.storyboard18.com/brand-marketing/costco-to-set-up-its-first-tech-hub-in-india-will-employ-around-1000-report-75808.htm", "sourceTitle": "Costco to set up its first tech hub in India, will employ around 1,000: Report", "sourceDate": "2025-07"}, {"id": "ev-vanguard-hyderabad", "company": "Vanguard", "hqCountry": "United States", "eventType": "new GCC", "city": "Hyderabad", "date": "2025-11-03", "detail": "First India GCC opened; ~300 by end-2025, ~2,300-2,400 by 2029; cloud, data, AI/ML, cybersecurity.", "sourceUrl": "https://www.hrkatha.com/news/vanguard-to-scale-hyderabad-gcc-targets-2400-workforce-by-2029/", "sourceTitle": "Vanguard to scale Hyderabad GCC, targets 2,400 workforce by 2029", "sourceDate": "2026-04"}, {"id": "ev-loreal-hyderabad", "company": "L'Oréal", "hqCountry": "France", "eventType": "new GCC", "city": "Hyderabad", "date": "2026-01-23", "detail": "First beauty-tech GCC; ~Rs 3,500 cr (EUR 350M) by 2030; ~2,000 roles; opening slated Nov 2026.", "sourceUrl": "https://allthingstalent.org/loreal-to-invest-%E2%82%B93500-crore-create-2000-jobs-with-hyderabad-gcc-launch/2026/01/23/amp/", "sourceTitle": "L'Oréal To Invest Rs 3,500 Crore, Create 2,000 Jobs With Hyderabad GCC Launch", "sourceDate": "2026-01-23"}, {"id": "ev-basf-hyderabad", "company": "BASF", "hqCountry": "Germany", "eventType": "new GCC", "city": "Hyderabad", "date": "2026-01-28", "detail": "Global Digital Hub via new entity BASF Digital Solutions Pvt Ltd (Q1 2026); separate global service hub (BASF Global Business Services Pvt Ltd) also reported.", "sourceUrl": "https://www.basf.com/global/en/media/news-releases/2026/01/p-26-012", "sourceTitle": "BASF news release P-26-012 (Digital Hub Hyderabad)", "sourceDate": "2026-01-28"}, {"id": "ev-ti-bengaluru", "company": "Texas Instruments", "hqCountry": "United States", "eventType": "expansion", "city": "Bengaluru", "date": "2026-02-07", "detail": "New 550,000 sq ft product R&D centre with reliability and IC design labs, marking 40 years in India.", "sourceUrl": "https://ianslive.in/texas-instruments-true-pioneer-in-indias-semiconductor-journey-ashwini-vaishnaw--20260207163314", "sourceTitle": "Texas Instruments true pioneer in India's semiconductor journey: Ashwini Vaishnaw", "sourceDate": "2026-02-07"}, {"id": "ev-sanofi-hyderabad", "company": "Sanofi (incl. Opella)", "hqCountry": "France", "eventType": "expansion", "city": "Hyderabad", "date": "2026-02-16", "detail": "Hyderabad GCC to host up to ~4,500 (from ~2,600 projected). Opella separately expanding to a 42,000 sq ft facility with up to 500 jobs.", "sourceUrl": "https://www.sanofi.com/assets/countries/india/docs/Media/press-releases/2026/press-release-sanofi-expands-its-Hyderabad-GCC-to-grow-capabilities-and-drive-innovation.pdf", "sourceTitle": "Sanofi expands its Hyderabad GCC to grow capabilities and drive innovation", "sourceDate": "2026-02-16"}, {"id": "ev-arcelormittal", "company": "ArcelorMittal (AMGBT)", "hqCountry": "Luxembourg", "eventType": "new GCC", "city": "Pune; Hyderabad", "date": "2026-02-26", "detail": "Global Business & Technologies centres; 1,100+ onboarded; ~2,000 target across digital, IT infra, data, cyber, GBS.", "sourceUrl": "https://www.socialnews.xyz/2026/02/26/global-steel-giant-arcelormittal-establishes-global-capability-centres-in-pune-and-hyderabad/", "sourceTitle": "Global Steel Giant ArcelorMittal Establishes Global Capability Centres in Pune and Hyderabad", "sourceDate": "2026-02-26"}, {"id": "ev-airbus-bengaluru", "company": "Airbus", "hqCountry": "Netherlands/France", "eventType": "expansion", "city": "Bengaluru", "date": "2026-03-06", "detail": "Airbus India Technology Centre, ~880,000 sq ft, capacity ~5,000; largest technology centre outside Europe.", "sourceUrl": "https://www.theweek.in/news/biz-tech/2026/03/07/airbus-technology-and-digital-innovation-centre-bengaluru.amp.html", "sourceTitle": "Airbus sets up its largest technology and digital innovation centre outside Europe in Bengaluru", "sourceDate": "2026-03-07"}, {"id": "ev-southwest-hyderabad", "company": "Southwest Airlines", "hqCountry": "United States", "eventType": "new GCC", "city": "Hyderabad", "date": "2026-05-20", "detail": "First Global Innovation Center outside the US at Sattva Knowledge City; ~200 near term, ~1,000 over next few years.", "sourceUrl": "https://www.peoplematters.in/news/recruiting-and-onboarding/southwest-airlines-plans-1000-hires-at-new-hyderabad-innovation-hub-49867", "sourceTitle": "Southwest Airlines plans 1,000 hires at new Hyderabad innovation hub", "sourceDate": "2026-05"}, {"id": "ev-target-manyata", "company": "Target", "hqCountry": "United States", "eventType": "lease", "city": "Bengaluru", "date": "2026-06", "detail": "~831,126 sq ft at Embassy Manyata Business Park; 10-yr lease from Sep 1 2025; ~Rs 1,250 cr total rent. Opening reported Oct 2026.", "sourceUrl": "https://www.constructionworld.in/latest-construction-news/real-estate-news/target-india-signs-rs12.5-bn-bengaluru-office-lease-for-gcc-expansion/93525", "sourceTitle": "Target India Signs Rs12.5 bn Bengaluru Office Lease for GCC Expansion", "sourceDate": "2026-06"}, {"id": "ev-merck-bengaluru", "company": "Merck KGaA (Merck Group)", "hqCountry": "Germany", "eventType": "new GCC", "city": "Bengaluru", "date": "2026-06-29", "detail": "Merck Global Capability Centre (MGCC) in Electronic City, 17,000 sq m, ~3,300 professionals; India now Merck's 4th largest workforce hub.", "sourceUrl": "https://biospectrumindia.com/news/102/28039/merck-inaugurates-global-capability-centre-in-bengaluru.html", "sourceTitle": "Merck inaugurates Global Capability Centre in Bengaluru", "sourceDate": "2026-06-29"}, {"id": "ev-hsbc-bengaluru", "company": "HSBC", "hqCountry": "United Kingdom", "eventType": "lease", "city": "Bengaluru", "date": "2026-07", "detail": "Non-binding LOI with Prestige Group for ~1.2M sq ft at Prestige JRC Signature Towers (ORR); 20-yr pre-lease; ~Rs 3,000 cr rental commitment.", "sourceUrl": "https://www.tribuneindia.com/news/business/hsbc-announces-plans-for-integrated-campus-in-bengaluru/", "sourceTitle": "HSBC announces plans for integrated campus in Bengaluru", "sourceDate": "2026-07"}, {"id": "ev-nestle-hyderabad", "company": "Nestlé (Nestlé Business Solutions)", "hqCountry": "Switzerland", "eventType": "new GCC", "city": "Hyderabad", "date": "2026-07-09", "detail": "New GCC under Nestlé Business Services India Pvt Ltd in partnership with Genpact; finance, procurement, HR, IT. No headcount disclosed.", "sourceUrl": "https://genpact.gcs-web.com/node/22206", "sourceTitle": "Genpact Partners with Nestlé Business Solutions to Establish New Global Capability Center", "sourceDate": "2026-07-09"}, {"id": "ev-guardian-hcltech", "company": "Guardian Life Insurance Company of America", "hqCountry": "United States", "eventType": "GCC divestment", "city": "Chennai / Gurugram (Guardian India)", "date": "2026-07-16", "detail": "Guardian India GCC (~2,000 staff) sold to HCLTech for USD 10.5M EV with 7-year services agreement.", "sourceUrl": "https://www.outlookbusiness.com/corporate/hcltech-to-acquire-guardian-india-for-105-million-2000-employees-to-transition", "sourceTitle": "HCLTech acquires Guardian India for $10.5 million", "sourceDate": "2026-07-16"}, {"id": "ev-schwab-hyderabad", "company": "Charles Schwab", "hqCountry": "United States", "eventType": "new GCC", "city": "Hyderabad", "date": "2026-08-19", "detail": "Schwab India technology capability centre, 3.45 lakh sq ft; ~500 in first year, ~2,000 by end-2027.", "sourceUrl": "https://www.outlookbusiness.com/corporate/us-financial-services-firm-charles-schwab-opens-technology-capability-centre-in-hyderabad", "sourceTitle": "US financial services firm Charles Schwab opens technology capability centre in Hyderabad", "sourceDate": "2026-08-20"}, {"id": "ev-bestbuy-tcs", "company": "Best Buy", "hqCountry": "United States", "eventType": "GCC divestment", "city": "Bengaluru", "date": "2026-10-01", "detail": "BBY Services India LLP transferred to TCS for Rs 1 lakh, to become an AI-focused centre; reported ~Rs 2,000 cr 5-year services deal; ~450-600 staff.", "sourceUrl": "https://www.angelone.in/news/stocks/tcs-share-price-in-focus-to-transition-best-buy-india-gcc-into-ai-capability-center", "sourceTitle": "TCS share price in focus to transition Best Buy India GCC into AI capability center", "sourceDate": "2026-10"}], "providers": [{"name": "ANSR", "category": "Setup advisor / BOT operator", "description": "Bengaluru-based GCC platform providing end-to-end setup, talent and managed teams; says it has supported 210+ GCC launches; Accenture holds ~23% (2024).", "url": "https://ansr.com"}, {"name": "Inductus GCC (Inductus Group)", "category": "Setup advisor / BOT operator", "description": "Noida-based GCC enabler offering BOT, COPO (client-owned, partner-operated) and modular models; MoUs with Gujarat and Kerala.", "url": "https://inductusgcc.com"}, {"name": "Zinnov", "category": "Setup advisor / BOT operator", "description": "Management consulting firm offering GCC strategy, location assessment, setup and managed services.", "url": "https://zinnov.com/offerings/gcc-setup-and-transformation/global-capability-center-setup/"}, {"name": "EY India", "category": "Setup advisor / BOT operator", "description": "Big Four advisory offering GCC strategy, setup, tax and regulatory services.", "url": "https://www.ey.com/en_in"}, {"name": "Deloitte India", "category": "Setup advisor / BOT operator", "description": "Big Four advisory offering GCC setup, operating model and tax advisory.", "url": "https://www.deloitte.com/in"}, {"name": "KPMG in India", "category": "Setup advisor / BOT operator", "description": "Big Four advisory offering GCC entry strategy, setup and compliance services.", "url": "https://kpmg.com/in"}, {"name": "PwC India", "category": "Setup advisor / BOT operator", "description": "Big Four advisory offering GCC setup, tax and transformation services.", "url": "https://www.pwc.in"}, {"name": "Accenture", "category": "Setup advisor / BOT operator", "description": "Global IT services firm offering GCC build and transformation; strategic investor in ANSR.", "url": "https://www.accenture.com/in-en"}, {"name": "Infosys", "category": "Setup advisor / BOT operator", "description": "Indian IT services firm offering build-operate-transfer GCCs (e.g., Truist Hyderabad).", "url": "https://www.infosys.com"}, {"name": "TCS", "category": "Setup advisor / BOT operator", "description": "Indian IT services firm offering GCC services and captive takeovers (e.g., Best Buy India GCC).", "url": "https://www.tcs.com"}, {"name": "Wipro", "category": "Setup advisor / BOT operator", "description": "Indian IT services firm with a dedicated GCC service line offering BOT engagements.", "url": "https://www.wipro.com"}, {"name": "HCLTech", "category": "Setup advisor / BOT operator", "description": "Indian IT services firm offering GCC services and captive acquisitions (e.g., Guardian India).", "url": "https://www.hcltech.com"}, {"name": "Genpact", "category": "Setup advisor / BOT operator", "description": "Professional services firm operating partner-run GCCs (e.g., with Nestlé Business Solutions).", "url": "https://www.genpact.com"}, {"name": "CBRE India", "category": "Real estate broker", "description": "Commercial real estate services; publishes GCC leasing research.", "url": "https://www.cbre.co.in"}, {"name": "JLL India", "category": "Real estate broker", "description": "Commercial real estate services; tracks GCC share of India office leasing.", "url": "https://www.jll.com/en-in"}, {"name": "Colliers India", "category": "Real estate broker", "description": "Commercial real estate services; GCC leasing forecasts.", "url": "https://www.colliers.com/en-in"}, {"name": "Cushman & Wakefield India", "category": "Real estate broker", "description": "Commercial real estate services; GCC office demand research.", "url": "https://www.cushmanwakefield.com/en/india"}, {"name": "Knight Frank India", "category": "Real estate broker", "description": "Real estate consultancy; office market and GCC leasing reports.", "url": "https://www.knightfrank.co.in"}, {"name": "WeWork India", "category": "Flex / managed office", "description": "Listed flex workspace operator; ~40% of members reported as GCCs.", "url": "https://wework.co.in/global-capability-center/"}, {"name": "Smartworks", "category": "Flex / managed office", "description": "Listed managed office operator; 12.7M sq ft portfolio (Sep 2025), large GCC campuses.", "url": "https://www.sworks.co.in"}, {"name": "Awfis", "category": "Flex / managed office", "description": "Listed flexible workspace operator; ~1.66 lakh seats across 18 cities (Dec 2025).", "url": "https://www.awfis.com"}, {"name": "IndiQube", "category": "Flex / managed office", "description": "Listed managed workspace operator; ~40% of client portfolio are GCCs.", "url": "https://indiqube.com"}, {"name": "Table Space", "category": "Flex / managed office", "description": "Managed office provider focused on enterprises and GCCs; 1.56M sq ft in Hyderabad (Oct 2026).", "url": "https://www.tablespace.com"}, {"name": "Bhive Workspace", "category": "Flex / managed office", "description": "Bengaluru-based coworking and managed office operator.", "url": "https://bhiveworkspace.com"}, {"name": "TeamLease Digital", "category": "Staffing / RPO", "description": "Tech staffing arm of TeamLease Services; supported HEINEKEN's GCC staffing.", "url": "https://www.teamleasedigital.com"}, {"name": "Quess Corp", "category": "Staffing / RPO", "description": "Indian staffing and business services company.", "url": "https://www.quesscorp.com"}, {"name": "Randstad India", "category": "Staffing / RPO", "description": "Indian arm of global staffing firm Randstad; staffing and RPO.", "url": "https://www.randstad.in"}, {"name": "Xpheno", "category": "Staffing / RPO", "description": "Specialist staffing firm focused on GCCs; claims 30,000+ GCC placements; launched RPO vertical.", "url": "https://www.xpheno.com"}, {"name": "ABC Consultants", "category": "Staffing / RPO", "description": "Indian executive search and recruitment firm.", "url": "https://www.abcconsultants.in"}, {"name": "ALP Consulting", "category": "Staffing / RPO", "description": "Indian staffing and HR services firm; publishes John Deere tech-center hiring case study.", "url": "https://alp.consulting"}, {"name": "Deel", "category": "EOR / payroll", "description": "Global employer-of-record, payroll and HR platform.", "url": "https://www.deel.com"}, {"name": "Multiplier", "category": "EOR / payroll", "description": "EOR and global payroll platform.", "url": "https://www.usemultiplier.com"}, {"name": "Remote", "category": "EOR / payroll", "description": "EOR, payroll and contractor management platform.", "url": "https://remote.com"}, {"name": "Globalization Partners (G-P)", "category": "EOR / payroll", "description": "Global employment / EOR platform.", "url": "https://www.globalization-partners.com"}, {"name": "Rippling", "category": "EOR / payroll", "description": "Workforce platform with global payroll and EOR.", "url": "https://www.rippling.com"}, {"name": "Atlas HXM", "category": "EOR / payroll", "description": "Direct EOR and global HR platform.", "url": "https://www.atlashxm.com"}, {"name": "Skuad", "category": "EOR / payroll", "description": "EOR and global payroll platform.", "url": "https://www.skuad.io"}, {"name": "Cyril Amarchand Mangaldas", "category": "Legal / tax", "description": "Indian full-service law firm; advised Guardian Life on Guardian India GCC sale.", "url": "https://www.cyrilshroff.com"}, {"name": "AZB & Partners", "category": "Legal / tax", "description": "Indian full-service law firm; acted for Accenture (ANSR).", "url": "https://www.azbpartners.com"}, {"name": "Khaitan & Co", "category": "Legal / tax", "description": "Indian full-service law firm.", "url": "https://www.khaitanco.com"}, {"name": "Trilegal", "category": "Legal / tax", "description": "Indian full-service law firm.", "url": "https://trilegal.com"}, {"name": "Nishith Desai Associates", "category": "Legal / tax", "description": "Indian law firm known for international tax and regulatory practice.", "url": "https://www.nishithdesai.com"}, {"name": "Shardul Amarchand Mangaldas", "category": "Legal / tax", "description": "Indian full-service law firm.", "url": "https://www.amsshardul.com"}, {"name": "Morgan Lewis", "category": "Legal / tax", "description": "US law firm; advised Guardian on expanded HCLTech relationship including Guardian India sale.", "url": "https://www.morganlewis.com"}], "engagements": [{"id": "en-ansr-lowes", "provider": "ANSR", "client": "Lowe's", "engagementType": "GCC setup partner (talent, workspace, IT, compliance)", "city": "Bengaluru", "year": 2014, "detail": "Vendor case study: grew from 50 (2014) to 4,300 (2023).", "sourceUrl": "https://ansr.com/case-study/retail/stores-supermarket/lowes/", "sourceTitle": "Case Study: How Lowe's Built a GCC That Powers 2000+ Stores Globally", "sourceDate": "2022-02-22", "confidence": "medium (vendor self-reported)"}, {"id": "en-teamlease-heineken", "provider": "TeamLease Digital", "client": "HEINEKEN", "engagementType": "Staffing support for GCC setup", "city": "Hyderabad", "year": 2025, "detail": "Supported staffing for HEINEKEN's first APAC GCC.", "sourceUrl": "https://cxotoday.com/media-coverage/teamlease-digital-supports-heineken-in-setting-up-its-first-global-capability-center-in-hyderabad/", "sourceTitle": "TeamLease Digital supports HEINEKEN in setting up its First Global Capability Center in Hyderabad", "sourceDate": "2025", "confidence": "high"}, {"id": "en-genpact-nestle", "provider": "Genpact", "client": "Nestlé Business Solutions", "engagementType": "Partner-operated GCC", "city": "Hyderabad", "year": 2026, "detail": "GCC under Nestlé Business Services India Pvt Ltd in partnership with Genpact (process intelligence, agentic AI).", "sourceUrl": "https://genpact.gcs-web.com/node/22206", "sourceTitle": "Genpact Partners with Nestlé Business Solutions to Establish New Global Capability Center", "sourceDate": "2026-07-09", "confidence": "high (company press release)"}, {"id": "en-infosys-truist", "provider": "Infosys", "client": "Truist Financial", "engagementType": "Build-operate-transfer GCC", "city": "Hyderabad", "year": 2026, "detail": "Deal reported >$500M; Infosys operates 5 years then transfers; ~4,500 staff target; 1,000+ onboarded by Oct 2026.", "sourceUrl": "https://www.outlookbusiness.com/corporate/infosys-bags-500-mn-truist-deal-for-hyderabad-gcc-it-wont-own", "sourceTitle": "Infosys Bags $500 Mn Truist Deal for Hyderabad GCC It Won't Own", "sourceDate": null, "confidence": "medium (reported via Mint)"}, {"id": "en-infosys-truist-expansion", "provider": "Infosys", "client": "Truist Financial", "engagementType": "BOT GCC expansion", "city": "Hyderabad", "year": 2026, "detail": "Expanded collaboration; over 1,000 colleagues onboarded.", "sourceUrl": "https://www.businesstoday.in/markets/stocks/story/infosys-stock-in-focus-as-company-expands-collaboration-with-us-based-truist-562668-2026-10-21", "sourceTitle": "Infosys stock in focus as company expands collaboration with US-based Truist", "sourceDate": "2026-10-21", "confidence": "high"}, {"id": "en-hcltech-guardian", "provider": "HCLTech", "client": "Guardian Life Insurance Company of America", "engagementType": "GCC acquisition + 7-year services agreement", "city": "India (Guardian India)", "year": 2026, "detail": "100% of Guardian India for USD 10.5M EV; ~2,000 staff transfer.", "sourceUrl": "https://www.hcltech.com/sites/default/files/en/investors/3098/Intimation-StockExchanges-Guardian.pdf", "sourceTitle": "HCLTech stock exchange intimation - Guardian India acquisition", "sourceDate": "2026-07-16", "confidence": "high (regulatory filing)"}, {"id": "en-cam-guardian", "provider": "Cyril Amarchand Mangaldas", "client": "Guardian Life Insurance Company of America", "engagementType": "Legal advisor (seller) on GCC divestment", "city": null, "year": 2026, "detail": "Advised on sale of Guardian India to HCLTech.", "sourceUrl": "https://www.barandbench.com/law-firms/dealstreet/cyril-amarchand-mangaldas-advises-guardian-life-insurance-company-of-america-on-selling-guardian-india-to-hcl", "sourceTitle": "Cyril Amarchand Mangaldas advises Guardian Life Insurance Company of America on selling Guardian India to HCL", "sourceDate": "2026-08", "confidence": "high"}, {"id": "en-morganlewis-guardian", "provider": "Morgan Lewis", "client": "Guardian Life Insurance Company of America", "engagementType": "Legal advisor on HCLTech relationship incl. GCC sale", "city": null, "year": 2026, "detail": "Advised on expanded HCLTech relationship.", "sourceUrl": "https://www.morganlewis.com/ja/news/2026/07/morgan-lewis-advises-guardian-on-expanded-relationship-with-hcltech-for-ai-powered-modernization", "sourceTitle": "Morgan Lewis advises Guardian on expanded relationship with HCLTech for AI-powered modernization", "sourceDate": "2026-07", "confidence": "high"}, {"id": "en-tcs-bestbuy", "provider": "TCS", "client": "Best Buy", "engagementType": "GCC takeover + reported 5-year services deal", "city": "Bengaluru", "year": 2026, "detail": "Acquired BBY Services India LLP for Rs 1 lakh; reported ~Rs 2,000 cr deal (TCS reportedly beat Accenture).", "sourceUrl": "https://www.5paisa.com/blog/tcs-best-buy-india-gcc-deal", "sourceTitle": "TCS Secures Best Buy's India GCC Mandate in Five-Year Deal Estimated at Rs 2,000 Crore", "sourceDate": "2026-10", "confidence": "medium-high"}, {"id": "en-accenture-ansr", "provider": "Accenture", "client": "ANSR", "engagementType": "Strategic investment / alliance (provider-provider)", "city": "Bengaluru", "year": 2024, "detail": "Jul 2024 alliance and ~23% stake ($170M); Jul 2026 reports of talks for majority stake (~$350M, ~$1B valuation), not confirmed completed.", "sourceUrl": "https://cxotoday.com/media-coverage/ansr-and-accenture-partner-to-launch-unmatched-suite-of-gcc-services-accenture-invests-in-ansr-and-will-join-its-board-of-directors/", "sourceTitle": "ANSR and Accenture partner to launch unmatched suite of GCC services; Accenture invests in ANSR", "sourceDate": "2024-07-26", "confidence": "high"}, {"id": "en-azb-accenture", "provider": "AZB & Partners", "client": "Accenture", "engagementType": "Legal advisor (ANSR transaction)", "city": null, "year": null, "detail": "AZB acted for Accenture; listing does not confirm which ANSR transaction or date.", "sourceUrl": "https://www.theworldlawgroup.com/membership/news/news-azb-partners-acted-for-accenture-1", "sourceTitle": "AZB & Partners acted for Accenture", "sourceDate": null, "confidence": "low (transaction details not verified)"}, {"id": "en-servicenow-ansr", "provider": "ANSR", "client": "ServiceNow (partner)", "engagementType": "Ecosystem partnership", "city": null, "year": 2023, "detail": "ServiceNow CoEs in 60+ GCCs, train 3,500 people.", "sourceUrl": "https://newsroom.servicenow.com/press-releases/details/2023/ServiceNow-announces-strategic-partnership-with-ANSR-to-power-global-capability-centers-on-the-Now-Platform-10-25-2023-traffic/default.aspx", "sourceTitle": "ServiceNow announces strategic partnership with ANSR to power Global Capability Centers on the Now Platform", "sourceDate": "2023-10-25", "confidence": "high"}, {"id": "en-tablespace-doordash", "provider": "Table Space", "client": "DoorDash", "engagementType": "Managed office (lease, design, build, management)", "city": "Hyderabad", "year": 2026, "detail": "Two-phase: initial office, then larger long-term workplace in HITEC City.", "sourceUrl": "https://businessnewsthisweek.com/business/table-spaces-hyderabad-portfolio-reaches-1-56-million-sq-ft-as-citys-gcc-and-enterprise-ecosystem-deepens/", "sourceTitle": "Table Space's Hyderabad portfolio reaches 1.56 million sq. ft. as city's GCC and enterprise ecosystem deepens", "sourceDate": "2026-10", "confidence": "medium-high"}, {"id": "en-indiqube-unnamed", "provider": "IndiQube", "client": "Unnamed GCC client", "engagementType": "Managed office lease (1,140 seats)", "city": "Pune", "year": 2026, "detail": "IndiQube Orchid; ~Rs 54 cr over 5 years. Client not named.", "sourceUrl": "https://indiqube.com/investor/wp-content/uploads/2026/03/Intimation-_Press-release_19_03_2026_.pdf", "sourceTitle": "IndiQube press release intimation 19-03-2026", "sourceDate": "2026-03-19", "confidence": "high (client unnamed)"}, {"id": "en-smartworks-pune", "provider": "Smartworks", "client": "Wolters Kluwer; Davies Shared Services", "engagementType": "Managed office lease", "city": "Pune", "year": 2025, "detail": "Named as recent large sign-ups in Smartworks press release (sq ft not captured).", "sourceUrl": "https://nsearchives.nseindia.com/corporate/SMARTWORKS_04122025173941_Press_Release_Intimation.pdf", "sourceTitle": "Smartworks press release intimation (NSE)", "sourceDate": "2025-12-04", "confidence": "medium (PDF not directly read; via search summary)"}, {"id": "en-zinnov-storable", "provider": "Zinnov", "client": "Storable", "engagementType": "GCC setup advisory (case study)", "city": null, "year": null, "detail": "Case study on Zinnov GCC setup page.", "sourceUrl": "https://zinnov.com/offerings/gcc-setup-and-transformation/global-capability-center-setup/", "sourceTitle": "Zinnov - Global Capability Center (GCC) Setup", "sourceDate": null, "confidence": "medium (vendor self-reported)"}, {"id": "en-zinnov-hmh", "provider": "Zinnov", "client": "HMH (Houghton Mifflin Harcourt)", "engagementType": "GCC partner (impact story)", "city": "Pune", "year": null, "detail": "HMH CTO impact story: Pune GCC with Zinnov partnering.", "sourceUrl": "https://zinnov.com/offerings/gcc-setup-and-transformation/global-capability-center-setup/", "sourceTitle": "Zinnov - Global Capability Center (GCC) Setup", "sourceDate": null, "confidence": "medium (vendor self-reported)"}, {"id": "en-alp-deere", "provider": "ALP Consulting", "client": "John Deere", "engagementType": "IT hiring & tech center setup (case study)", "city": "Pune", "year": null, "detail": "Vendor case study title: 'John Deere Case Study - IT Hiring & Tech Center Setup'. Content not independently verified.", "sourceUrl": "https://alp.consulting/?p=25282", "sourceTitle": "John Deere Case Study - IT Hiring & Tech Center Setup", "sourceDate": null, "confidence": "low (vendor page, not read in full)"}, {"id": "en-inductus-gujarat", "provider": "Inductus Group", "client": "Department of Science & Technology, Government of Gujarat", "engagementType": "State GCC promotion MoU", "city": "Gujarat", "year": 2026, "detail": "MoU to position Gujarat as a GCC hub.", "sourceUrl": "https://www.cxodigitalpulse.com/inductus-group-and-dst-government-of-gujarat-signed-strategic-mou-to-position-gujarat-as-a-global-gcc-hub/", "sourceTitle": "Inductus Group and DST, Government of Gujarat Signed Strategic MoU to Position Gujarat as a Global GCC Hub", "sourceDate": "2026-04", "confidence": "high"}]}</script>
+<script>
+const RAW = JSON.parse(document.getElementById("dataset").textContent);
+
+// ---------- Reference data (sourced; see each row's url) ----------
+const COUNTS = [
+ {label:"OceanFrogs (Jul 2025)", v:2168, url:"https://www.oceanfrogs.com/newsletter/episode-7-launching-gcc-index/"},
+ {label:"Nasscom–Zinnov (Mar 2026)", v:2117, url:"https://zinnov.com/centers-of-excellence/zinnov-nasscom-india-gcc-landscape-2026-report/"},
+ {label:"ANSR (May 2026)", v:1900, plus:true, url:"https://www.cxodigitalpulse.com/?p=54894"},
+ {label:"AIM Research", v:1782, url:"https://gccexplorer.com"},
+ {label:"Government of India (Dec 2025)", v:1700, plus:true, url:"https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/dec/doc20251211727201.pdf"}
+];
+const KF = "https://content.knightfrank.com/research/3116/documents/en/india-real-estate-office-and-residential-market-h1-2026-12927.pdf";
+const CITIES = [
+ {name:"Bengaluru",state:"Karnataka",tier:1,rent:102,rentUrl:KF,talent:660,gccs:487,match:["Bengaluru"],rule:{kind:"none",text:"Karnataka gives rent support only outside Bengaluru."}},
+ {name:"Hyderabad",state:"Telangana",tier:1,rent:80,rentUrl:KF,talent:235,gccs:273,match:["Hyderabad"],rule:{kind:"none",text:"Telangana has no GCC policy yet; its IT policy applies."}},
+ {name:"Pune",state:"Maharashtra",tier:1,rent:81.7,rentUrl:KF,talent:230,gccs:178,match:["Pune"],rule:{kind:"pct",pct:.10,capCr:4,text:"Maharashtra pays 10% of rent for new centres, up to ₹1–4 crore a year."}},
+ {name:"Chennai",state:"Tamil Nadu",tier:1,rent:74.5,rentUrl:KF,talent:210,gccs:162,match:["Chennai"],rule:{kind:"none",text:"Tamil Nadu has no GCC policy; other incentives apply."}},
+ {name:"Gurugram (Delhi NCR)",state:"Haryana",tier:1,rent:106,rentUrl:KF,talent:270,gccs:272,match:["Gurugram","Delhi","New Delhi"],rule:{kind:"haryana",text:"Haryana covers about 37.5% of rent for 5 years, capped by team size."}},
+ {name:"Noida (Delhi NCR)",state:"Uttar Pradesh",tier:1,rent:101,rentUrl:KF,talent:270,gccs:272,match:["Noida"],rule:{kind:"pct",pct:.20,capCr:40,minHead:200,text:"Uttar Pradesh covers 20% of rent and running costs for 5 years (200+ staff in Noida)."}},
+ {name:"Mumbai",state:"Maharashtra",tier:1,rent:130,rentUrl:KF,talent:235,gccs:207,match:["Mumbai"],rule:{kind:"pct",pct:.10,capCr:4,text:"Maharashtra pays 10% of rent for new centres, up to ₹1–4 crore a year."}},
+ {name:"Ahmedabad (GIFT City)",state:"Gujarat",tier:2,rent:45,rentUrl:KF,talent:null,gccs:null,match:["GIFT City","Ahmedabad","Gandhinagar"],rule:{kind:"gujarat",minHead:50,text:"Gujarat covers 15% of running costs including rent, up to ₹20 crore a year (50+ staff)."}},
+ {name:"Kolkata",state:"West Bengal",tier:2,rent:51.1,rentUrl:KF,talent:null,gccs:null,match:["Kolkata"],rule:{kind:"none",text:"West Bengal’s GCC policy is still a draft."}},
+ {name:"Coimbatore",state:"Tamil Nadu",tier:2,rent:69.3,rentUrl:"https://realtynmore.com/coimbatore-real-estateq1-2026-cushman-wakefield/",talent:null,gccs:null,match:["Coimbatore"],rule:{kind:"none",text:"Tamil Nadu has no GCC policy; other incentives apply."}},
+ {name:"Jaipur",state:"Rajasthan",tier:2,rent:49.8,rentUrl:"https://togetherbuying.in/articles/most-expensive-offices-in-india-2026-city-wise-rent-analysis",talent:null,gccs:null,match:["Jaipur"],rule:{kind:"pct",pct:.50,capCr:5,minHead:101,text:"Rajasthan pays 50% of rent for 3 years for its first 10 large GCCs, up to ₹5 crore a year."}}
+];
+const TIER2_TALENT = 85; // thousand people, Zinnov: five smaller cities combined, FY2025
+
+const POLICIES = [
+ {state:"Karnataka",policy:"Karnataka GCC Policy 2024–29",inc:["Outside Bengaluru: rent 50% up to ₹2 cr; hiring costs 50% up to ₹7 cr","New centres outside Bengaluru: ₹3,000 per employee a month for 2 years","Labs and research centres: 40% of setup cost"],src:"BDO India",url:"https://bdo.in/getmedia/ee3322eb-8399-4a67-b3b3-9a71ed9e6746/GCC-Policy_BDO-India_Karnataka-GCC-Policy-_Design_1.pdf"},
+ {state:"Uttar Pradesh",policy:"UP GCC Policy 2024",inc:["25% of setup cost, up to ₹10–25 cr","20% of rent and running costs for 5 years","Part of salaries paid for the first years"],src:"Invest UP (official)",url:"https://invest.up.gov.in/up-gcc-policy-2024/"},
+ {state:"Gujarat",policy:"Gujarat GCC Policy 2025–30",inc:["20–30% of setup cost, up to ₹50–200 cr","15% of running costs incl. rent for 5 years","Provident fund contribution paid for 5 years"],src:"RSM India",url:"https://www.rsm.global/india/sites/default/files/media/publications/2025/Gujarat%20GCC%20Policy%202025_A%20Landmark%20Initiative%20to%20Attract%20Global%20Enterprises.pdf"},
+ {state:"Maharashtra",policy:"Maharashtra GCC Policy 2025",inc:["20% of equipment cost, up to ₹10–100 cr","Or rent support: 10–20%, up to ₹1–4 cr","Part of high salaries paid for 3 years"],src:"RSM India",url:"https://www.rsm.global/india/sites/default/files/media/publications/2025/RSM%20India%20Newsflash%20-%20Maharashtra%20Introduces%20the%20GCC%20Policy%202025%20-%20Key%20Highlights%20%26%20Incentives.pdf"},
+ {state:"Haryana",policy:"Haryana GCC Policy 2026",inc:["50–75% of setup cost by area","50–65% of running costs for 5–9 years","Provident fund contribution paid for 5 years"],src:"Grant Thornton",url:"https://www.grantthornton.in/globalassets/1.-member-firms/india/assets/pdfs/alerts/haryana-global-capability-centres-policy-2026.pdf"},
+ {state:"Rajasthan",policy:"Rajasthan GCC Policy 2025",inc:["30% of setup cost, up to ₹10 cr","First 10 large GCCs: 30% of salaries and 50% of rent","No stamp or electricity duty"],src:"Mondaq",url:"https://webiis10.mondaq.com/india/employee-rights-labour-relations/1724116/impetus-to-gccs-in-india-rajasthan-releases-its-gcc-policy"},
+ {state:"Madhya Pradesh",policy:"MP GCC Policy 2025",inc:["40% of setup cost (not confirmed)","Rent help up to ₹3 cr (not confirmed)"],src:"Drishti IAS",url:"https://www.drishtiias.com/state-pcs-current-affairs/madhya-pradesh-gcc-policy-2025"},
+ {state:"Andhra Pradesh",policy:"AP IT & GCC Policy 2024–29",inc:["6 months of salary per new hire, paid after 18 months","₹2,000 per seat a month in rent for 2 years"],src:"Khaitan & Co",url:"https://khaitanco.com/thought-leadership/Impetus-to-GCCs-in-India-Andhra-Pradesh-Releases-its-IT-and-GCC-Policy"},
+ {state:"Odisha",policy:"Odisha GCC Policy 2025",inc:["30% of setup cost","Co-working seats up to ₹6,000 a month","₹30,000–40,000 per local hire"],src:"Mondaq",url:"https://webiis10.mondaq.com/india/contracts-and-commercial-law/1749448/impetus-to-gccs-in-india-odisha-releases-its-gcc-policy"}
+];
+
+const CATS = ["Office space","Recruiting","Payroll","Legal and tax","Setup advice"];
+const PCAT = {"Setup advisor / BOT operator":"Setup advice","Real estate broker":"Office space","Flex / managed office":"Office space","Staffing / RPO":"Recruiting","EOR / payroll":"Payroll","Legal / tax":"Legal and tax"};
+
+// ---------- helpers ----------
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n=>Number(n).toLocaleString("en-IN");
+const cr = rupees=>"₹"+(rupees/1e7).toLocaleString("en-IN",{maximumFractionDigits:1})+" crore";
+const ext = (url,label)=>url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label||"source")}</a>`:"";
+const STOP=/\b(the|inc|incorporated|corp|corporation|co|company|companies|plc|ltd|limited|pvt|private|llp|ag|se|sa|nv|gmbh|oyj|group|holdings|india|indian|global|technology|technologies|tech|services|service|solutions|centre|center|capability|gcc|gccs|digital|business|shared|software|engineering|design|development|research|innovation|campus|hub|international|of|and|wholesale)\b/g;
+const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(STOP," ").split(/\s+/).filter(t=>t.length>1);
+function cityKey(c){
+  const s=String(c).replace(/\(.*?\)/g,"").trim();
+  if(/gurugram|gurgaon/i.test(s)) return "Gurugram";
+  if(/noida/i.test(s)) return "Noida";
+  if(/delhi/i.test(s)) return "Delhi";
+  if(/gift/i.test(s)) return "GIFT City";
+  if(/bangalore/i.test(s)) return "Bengaluru";
+  return s;
+}
+const splitCities = s=>String(s||"").split(/;|\/|->|,/).map(cityKey).filter(Boolean);
+
+// ---------- turn the dataset into records ----------
+let GCCS = RAW.gccs.map((g,i)=>({
+  id:"G"+(i+1), name:g.company, parent:g.parentCompany, hq:g.parentHqCountry, sector:g.sector, entity:g.indianEntity,
+  cities:[...new Set(g.cities.map(cityKey))], headcount:g.indiaHeadcount, hcType:g.headcountType, hcYear:g.headcountYear, hcNote:g.headcountNote,
+  est:g.yearEstablishedIndia, funcs:g.functions||[], status:"operating",
+  sources:(g.sources||[]).map(s=>({url:s.sourceUrl,title:s.sourceTitle,date:s.sourceDate})) }));
+
+function resolve(names, pool=GCCS){
+  let best=null;
+  for(const g of pool){ for(const cand of [g.name,g.parent,g.entity].filter(Boolean)){ const a=new Set(norm(cand));
+    for(const n of names){ const b=norm(n); if(!b.length||!a.size) continue;
+      const inter=b.filter(t=>a.has(t)).length; const s=inter/Math.min(a.size,b.length)*(inter/Math.max(a.size,b.length))**.25;
+      if(!best||s>best.score) best={g,score:s,via:cand}; } } }
+  return best&&best.score>=.6?best:null;
+}
+const TYPE = {"new GCC":"Opened a new GCC","new GCC (reported)":"New GCC, reported","expansion":"Expanded","lease":"Signed an office lease","consolidation":"Closed or merged a centre","GCC divestment":"Sold its GCC to an IT firm"};
+let EVENTS = RAW.events.map((e,i)=>({id:"E"+(i+1),company:e.company,hq:e.hqCountry,type:TYPE[e.eventType]||e.eventType,cityRaw:e.city,cities:splitCities(e.city),date:e.date,detail:e.detail,url:e.sourceUrl,title:e.sourceTitle}))
+  .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+for(const e of EVENTS){
+  const m=resolve([e.company]);
+  if(m){ e.gcc=m.g.id; if(/Sold/.test(e.type)) m.g.status="divested"; continue; }
+  const g={id:"G"+(GCCS.length+1),name:e.company,parent:e.company,hq:e.hq,sector:"",entity:null,cities:e.cities,
+    headcount:null,hcType:null,hcYear:null,hcNote:null,est:String(e.date).slice(0,4),funcs:[],
+    status:/Sold/.test(e.type)?"divested":/reported/i.test(e.type)?"reported":"entrant",
+    sources:[{url:e.url,title:e.title,date:e.date}]};
+  GCCS.push(g); e.gcc=g.id;
+}
+// plain industry names; new entrants carry no sector in the dataset, so name it from the company
+const ENTRANT_SECTOR=[[/Lilly|Merck|Sanofi/,"Pharma"],[/McDonald|HEINEKEN|Nestl|L.Or/,"Consumer goods"],[/Costco|Best Buy/,"Retail"],[/Vanguard|Schwab/,"Banking and finance"],[/Guardian/,"Insurance"],[/BASF/,"Chemicals"],[/ArcelorMittal/,"Steel"],[/Southwest/,"Airline"]];
+GCCS.forEach(g=>{ if(g.sector==="BFSI") g.sector="Banking and finance"; if(!g.sector){ const m=ENTRANT_SECTOR.find(([re])=>re.test(g.name)); g.sector=m?m[1]:""; } });
+const LEVEL = c=>/vendor|low/i.test(c)?"self":/high/i.test(c)&&!/medium/i.test(c)?"documented":"reported";
+const LEVEL_LABEL={documented:"Official",reported:"News report",self:"Provider’s own claim"};
+let PROVIDERS = RAW.providers.map((p,i)=>({id:"P"+(i+1),name:p.name,cat:PCAT[p.category]||p.category,desc:p.description,url:p.url,eng:[]}));
+// a stake, a partnership or a government agreement is not GCC client work
+const NOT_GCC_CLIENT=/^(ANSR|Accenture|ServiceNow)|Government|Department/i;
+RAW.engagements.forEach((x,i)=>{
+  if(NOT_GCC_CLIENT.test(x.client)) return;
+  const p=PROVIDERS.find(p=>p.name===x.provider)||PROVIDERS.find(p=>p.name.includes(x.provider)||x.provider.includes(p.name.split(" (")[0]));
+  if(!p) return;
+  const m=resolve([x.client]);
+  p.eng.push({client:x.client,gcc:m?.g.id||null,type:x.engagementType,city:x.city,year:x.year,detail:x.detail,url:x.sourceUrl,title:x.sourceTitle,level:LEVEL(x.confidence||"")});
+});
+
+const gById = id=>GCCS.find(g=>g.id===id);
+const pById = id=>PROVIDERS.find(p=>p.id===id);
+const STATUS={operating:"Running",entrant:"New in 2025–26",reported:"Reported, not confirmed",divested:"Sold to an IT firm"};
+const statusPill = s=>`<span class="pill s-${s}">${STATUS[s]||esc(s)}</span>`;
+const WHO={official:"company figure",press:"news report",thirdParty:"estimate"};
+const staff = g=>g.headcount?`${fmt(g.headcount)} <span class="sub">(${WHO[g.hcType]||"reported"}${g.hcYear?", "+g.hcYear:""})</span>`:'<span class="sub">not public</span>';
+let freshIds=new Set();
+
+// ---------- saved state (this browser only) ----------
+const KEY="gccatlas.v2";
+const BLANK=()=>({saved:[],notes:{},added:{gccs:[],events:[],cityAdds:[]},alerts:{cat:"Office space",cities:[],only:false},seen:[]});
+let store=BLANK();
+try{ const s=JSON.parse(localStorage.getItem(KEY)||"null"); if(s) store={...store,...s,added:{...store.added,...(s.added||{})},alerts:{...store.alerts,...(s.alerts||{})}}; }catch(e){}
+const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){} };
+// replay what the viewer added earlier
+store.added.gccs.forEach(g=>{ if(!gById(g.id)) GCCS.push(g); });
+store.added.events.forEach(e=>{ if(!EVENTS.some(x=>x.id===e.id)) EVENTS.push(e); });
+store.added.cityAdds.forEach(({gcc,city})=>{ const g=gById(gcc); if(g&&!g.cities.includes(city)) g.cities.push(city); });
+EVENTS.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+const isSaved=id=>store.saved.includes(id);
+function toggleSave(id){ store.saved=isSaved(id)?store.saved.filter(x=>x!==id):[...store.saved,id]; persist(); toast(isSaved(id)?"Added to My list":"Removed from My list"); refreshAll(); }
+let toastT;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2200); }
+const nextId=(prefix,list)=>prefix+(1000+list.filter(x=>x.id.startsWith(prefix+"1")).length+1);
+
+// ---------- navigation ----------
+const TABS=["dash","list","new","providers","planner","add","saved"];
+let current="dash";
+function show(tab){
+  if(!TABS.includes(tab)) tab="dash";
+  current=tab;
+  document.querySelectorAll("[data-view]").forEach(s=>s.hidden=s.dataset.view!==tab);
+  document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===tab));
+  try{history.replaceState(null,"","#"+tab)}catch(e){}
+  closeDrawer(); window.scrollTo(0,0);
+  if(tab==="new"){ renderSignals(); store.seen=EVENTS.map(e=>e.id); persist(); renderCounts(); }
+}
+$("#nav").addEventListener("click",e=>{const b=e.target.closest("button[data-tab]"); if(b) show(b.dataset.tab)});
+document.addEventListener("click",e=>{
+  const g=e.target.closest("[data-go]"); if(g){ if(g.dataset.city){ $("#fCity").value=g.dataset.city; } if(g.dataset.status!==undefined){ $("#fStatus").value=g.dataset.status; } if(g.dataset.go==="list") renderList(); show(g.dataset.go); }
+  const og=e.target.closest("[data-open-g]"); if(og&&!e.target.closest("#drawer")) openGcc(og.dataset.openG);
+  const op=e.target.closest("[data-open-p]"); if(op&&!e.target.closest("#drawer")) openProvider(op.dataset.openP);
+  const st=e.target.closest("[data-star]"); if(st){ e.stopPropagation(); toggleSave(st.dataset.star); }
+},true);
+function renderCounts(){
+  const unread=EVENTS.filter(e=>!store.seen.includes(e.id)).length;
+  $("#cList").textContent=GCCS.length; $("#cProv").textContent=PROVIDERS.length;
+  $("#cNew").textContent=unread; $("#cNew").hidden=!unread;
+  $("#cSaved").textContent=store.saved.length; $("#cSaved").hidden=!store.saved.length;
+}
+
+// ---------- global search ----------
+$("#gq").addEventListener("input",()=>{
+  const q=$("#gq").value.trim().toLowerCase(); const box=$("#gres");
+  if(q.length<2){ box.hidden=true; return; }
+  const hits=[
+    ...GCCS.filter(g=>[g.name,g.parent,g.sector,g.hq,...g.cities].join(" ").toLowerCase().includes(q)).slice(0,6).map(g=>({k:"g",id:g.id,label:g.name,meta:"Company · "+g.cities.slice(0,2).join(", ")})),
+    ...PROVIDERS.filter(p=>[p.name,p.cat].join(" ").toLowerCase().includes(q)).slice(0,4).map(p=>({k:"p",id:p.id,label:p.name,meta:"Provider · "+p.cat})),
+    ...CITIES.filter(c=>c.name.toLowerCase().includes(q)).slice(0,3).map(c=>({k:"c",id:c.name,label:c.name,meta:"City · open in planner"}))];
+  box.innerHTML=hits.length?hits.map(h=>`<button data-k="${h.k}" data-id="${esc(h.id)}"><b>${esc(h.label)}</b><span class="sub">${esc(h.meta)}</span></button>`).join(""):'<p class="note" style="padding:8px">No matches.</p>';
+  box.hidden=false;
+});
+$("#gres").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-k]"); if(!b) return;
+  $("#gres").hidden=true; $("#gq").value="";
+  if(b.dataset.k==="g") openGcc(b.dataset.id); else if(b.dataset.k==="p") openProvider(b.dataset.id); else { show("planner"); pickCity(b.dataset.id); }
+});
+document.addEventListener("click",e=>{ if(!e.target.closest(".search")) $("#gres").hidden=true; });
+$("#gq").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const f=$("#gres button"); if(f) f.click(); } if(e.key==="Escape") $("#gres").hidden=true; });
+
+// ---------- dashboard ----------
+const cityGroup=c=>["Gurugram","Noida","Delhi"].includes(c)?"Delhi NCR":c==="GIFT City"?"Ahmedabad":c;
+function renderDash(){
+  const n=s=>GCCS.filter(g=>g.status===s).length;
+  const unread=EVENTS.filter(e=>!store.seen.includes(e.id)).length;
+  const withProof=PROVIDERS.filter(p=>p.eng.length).length;
+  $("#kpis").innerHTML=[
+    [GCCS.length,"companies tracked",'data-go="list" data-status=""'],
+    [n("entrant")+n("reported"),"new in 2025–26",'data-go="list" data-status="entrant"'],
+    [unread,"unread news",'data-go="new"'],
+    [`${withProof}/${PROVIDERS.length}`,"providers with proof",'data-go="providers"'],
+    [store.saved.length,"in my list",'data-go="saved"']
+  ].map(([v,l,a])=>`<button class="kpi" ${a}><span class="v">${v}</span><span class="l">${l}</span></button>`).join("");
+  const counts={}; GCCS.forEach(g=>new Set(g.cities.map(cityGroup)).forEach(c=>{ if(c&&c!=="Not stated") counts[c]=(counts[c]||0)+1; }));
+  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8), max=top[0]?.[1]||1;
+  $("#chartCity").innerHTML=top.map(([c,v])=>`<button class="bar" data-go="list" data-city="${esc(c)}"><span>${esc(c)}</span><i><b style="width:${v/max*100}%"></b></i><span class="n">${v}</span></button>`).join("");
+  const months=[]; for(let y=2025;y<=2026;y++) for(let m=1;m<=12;m++){ const k=`${y}-${String(m).padStart(2,"0")}`; if(k<="2026-10") months.push(k); }
+  const per=Object.fromEntries(months.map(k=>[k,EVENTS.filter(e=>String(e.date).startsWith(k)).length]));
+  const mx=Math.max(1,...Object.values(per));
+  $("#chartMonth").innerHTML=months.map(k=>`<div title="${k}: ${per[k]} news">${per[k]?per[k]:""}<b style="height:${per[k]/mx*100}%"></b></div>`).join("");
+  $("#chartMonthL").innerHTML=months.map((k,i)=>`<span>${i%3===0?["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+k.slice(5)-1]+" "+k.slice(2,4):""}</span>`).join("");
+  $("#latest").innerHTML=EVENTS.slice(0,5).map(e=>`<div class="card"><div class="top"><div><span class="sub">${esc(e.date)} · ${esc(e.cityRaw)}</span><br><b>${esc(e.company)}</b>: ${esc(e.type.toLowerCase())}</div><button class="btn ghost small" data-open-g="${e.gcc}">View</button></div></div>`).join("");
+  const cmax=Math.max(...COUNTS.map(c=>c.v));
+  $("#counts").innerHTML=COUNTS.map(c=>`<div class="crow"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.label)}</a><div class="track"><b style="width:${c.v/cmax*100}%"></b></div><span class="v">${fmt(c.v)}${c.plus?"+":""}</span></div>`).join("");
+}
+
+// ---------- companies ----------
+function fillSelect(sel,label,values){const keep=sel.value; sel.innerHTML=`<option value="">${label}</option>`+values.map(v=>`<option>${esc(v)}</option>`).join(""); if(values.includes(keep)) sel.value=keep;}
+let listSort={key:"staff",dir:-1};
+const sortVal={name:g=>g.name.toLowerCase(),hq:g=>String(g.hq).toLowerCase(),sector:g=>String(g.sector).toLowerCase(),cities:g=>g.cities.length,staff:g=>g.headcount||0,status:g=>STATUS[g.status]};
+function filteredList(){
+  const q=$("#q").value.trim().toLowerCase(), c=$("#fCity").value, s=$("#fStatus").value, sec=$("#fSector").value;
+  const inCity=g=>!c||g.cities.map(cityGroup).includes(c)||g.cities.includes(c);
+  const rows=GCCS.filter(g=>inCity(g)&&(!s||g.status===s)&&(!sec||g.sector===sec)&&(!q||[g.name,g.parent,g.sector,g.hq,...g.cities].join(" ").toLowerCase().includes(q)));
+  const f=sortVal[listSort.key]; rows.sort((a,b)=>{const x=f(a),y=f(b); return (x>y?1:x<y?-1:0)*listSort.dir;});
+  return rows;
+}
+function renderList(){
+  const rows=filteredList();
+  $("#listCount").textContent=`${rows.length} of ${GCCS.length} companies · click a column to sort`;
+  document.querySelectorAll("th[data-sort]").forEach(th=>{ th.querySelector(".arrow")?.remove(); if(th.dataset.sort===listSort.key) th.insertAdjacentHTML("beforeend",`<span class="arrow">${listSort.dir>0?"▲":"▼"}</span>`); });
+  $("#regBody").innerHTML=rows.map(g=>`<tr data-g="${g.id}"><td><button class="star" data-star="${g.id}" aria-pressed="${isSaved(g.id)}" aria-label="Save ${esc(g.name)}">★</button></td><td><b>${esc(g.name)}</b>${freshIds.has(g.id)?' <span class="pill s-entrant">Just added</span>':""}${store.notes[g.id]?' <span class="pill e-self">Note</span>':""}</td><td>${esc(g.hq)}</td><td>${esc(g.sector)}</td><td>${g.cities.map(esc).join(", ")}</td><td class="num">${staff(g)}</td><td>${statusPill(g.status)}</td></tr>`).join("")
+    || `<tr><td colspan="7"><div class="empty">No company matches these filters.</div></td></tr>`;
+}
+["#q","#fCity","#fStatus","#fSector"].forEach(s=>$(s).addEventListener("input",renderList));
+document.querySelectorAll("th[data-sort]").forEach(th=>th.addEventListener("click",()=>{ const k=th.dataset.sort; listSort={key:k,dir:listSort.key===k?-listSort.dir:(k==="staff"?-1:1)}; renderList(); }));
+$("#regBody").addEventListener("click",e=>{ if(e.target.closest("[data-star]")) return; const r=e.target.closest("tr[data-g]"); if(r) openGcc(r.dataset.g); });
+
+// ---------- CSV export ----------
+const csvCell=v=>{ const s=String(v??""); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; };
+const toCSV=(head,rows)=>[head,...rows].map(r=>r.map(csvCell).join(",")).join("\n");
+let downloads=null;
+(window.claude?.use?window.claude.use("downloads"):Promise.resolve(null)).then(d=>downloads=d).catch(()=>{});
+async function saveFile(filename,text){
+  if(downloads){ try{ await downloads.save({filename,data:new Blob(["﻿"+text],{type:"text/csv"})}); toast("Download ready"); return; }catch(e){ if(e?.code==="declined"||e?.code==="cancelled") return; } }
+  try{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+text],{type:"text/csv"})); a.download=filename; document.body.appendChild(a); a.click(); a.remove(); toast("Downloaded "+filename); }
+  catch(e){ toast("Download is not available here"); }
+}
+const gccRow=g=>[g.name,g.parent,g.hq,g.sector,g.cities.join("; "),g.headcount||"",g.headcount?WHO[g.hcType]||"":"",STATUS[g.status],store.notes[g.id]||"",g.sources.map(s=>s.url).filter(Boolean).join(" ")];
+const GCC_HEAD=["Company","Parent","Based in","Industry","Cities","India staff","Staff figure from","Status","My note","Sources"];
+$("#exportList").onclick=()=>saveFile("gcc-atlas-companies.csv",toCSV(GCC_HEAD,filteredList().map(gccRow)));
+$("#exportSaved").onclick=()=>{ const rows=store.saved.map(gById).filter(Boolean); if(!rows.length) return toast("Your list is empty"); saveFile("gcc-atlas-my-list.csv",toCSV(GCC_HEAD,rows.map(gccRow))); };
+$("#exportProv").onclick=()=>saveFile("gcc-atlas-providers.csv",toCSV(["Provider","Type","GCC clients with proof","Strongest proof","Website"],filteredProviders().map(p=>[p.name,p.cat,p.eng.map(x=>x.client).join("; "),p.eng.length?LEVEL_LABEL[bestKey(p)]:"None found",p.url])));
+
+// ---------- side panel ----------
+function openDrawer(html){$("#drawer").innerHTML=html;$("#drawer").hidden=false;$("#scrim").hidden=false;$("#drawer").querySelector("[data-close]")?.focus()}
+function closeDrawer(){$("#drawer").hidden=true;$("#scrim").hidden=true}
+$("#scrim").onclick=closeDrawer;
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer()});
+$("#drawer").addEventListener("click",e=>{
+  if(e.target.closest("[data-close]")) return closeDrawer();
+  const st=e.target.closest("[data-dstar]"); if(st){ toggleSave(st.dataset.dstar); openGcc(st.dataset.dstar); return; }
+  const g=e.target.closest("[data-open-g]"); if(g) return openGcc(g.dataset.openG);
+  const p=e.target.closest("[data-open-p]"); if(p) return openProvider(p.dataset.openP);
+});
+let noteT;
+function openGcc(id){
+  const g=gById(id); if(!g) return;
+  const ev=EVENTS.filter(e=>e.gcc===id);
+  const prov=PROVIDERS.flatMap(p=>p.eng.filter(x=>x.gcc===id).map(x=>({p,x})));
+  openDrawer(`<div class="dhead"><div><h2 style="font-size:21px">${esc(g.name)}</h2><div style="margin-top:6px">${statusPill(g.status)}</div></div><div class="filters"><button class="btn ${isSaved(id)?"":"ghost"} small" data-dstar="${id}">${isSaved(id)?"★ Saved":"☆ Save"}</button><button class="btn ghost small" data-close>Close</button></div></div>
+  <dl class="kv"><dt>Parent company</dt><dd>${esc(g.parent)}</dd><dt>Based in</dt><dd>${esc(g.hq)}</dd>${g.sector?`<dt>Industry</dt><dd>${esc(g.sector)}</dd>`:""}<dt>Cities in India</dt><dd>${g.cities.map(esc).join(", ")}</dd>
+  <dt>India staff</dt><dd>${staff(g)}${g.hcNote?`<div class="sub">${esc(g.hcNote)}</div>`:""}</dd>${g.est?`<dt>In India since</dt><dd>${esc(g.est)}</dd>`:""}${g.entity?`<dt>Indian company name</dt><dd>${esc(g.entity)}</dd>`:""}${g.funcs.length?`<dt>Work done</dt><dd>${g.funcs.map(esc).join(", ")}</dd>`:""}</dl>
+  <label for="note">My note (saved automatically)<textarea id="note" style="min-height:80px" placeholder="For example: met their India head in May; follow up in Q1">${esc(store.notes[id]||"")}</textarea></label>
+  ${ev.length?`<h3>News</h3><div class="tl">${ev.map(e=>`<div><span class="d">${esc(e.date)} · ${esc(e.cityRaw)}</span><br><b>${esc(e.type)}.</b> ${esc(e.detail)}<br>${e.url?ext(e.url,"Read the source"):'<span class="sub">From a pasted article</span>'}</div>`).join("")}</div>`:""}
+  <h3>Partners who worked with them</h3><div class="tl">${prov.length?prov.map(({p,x})=>`<div><button class="link" data-open-p="${p.id}">${esc(p.name)}</button>: ${esc(x.type)} <span class="pill e-${x.level}">${LEVEL_LABEL[x.level]}</span></div>`).join(""):'<div class="sub">None with public proof yet.</div>'}</div>
+  <h3>Sources</h3><div class="tl">${g.sources.map(s=>`<div>${s.url?ext(s.url,s.title||s.url):esc(s.title||"Added by you")}${s.date?` <span class="sub">${esc(s.date)}</span>`:""}</div>`).join("")||'<div class="sub">Added by you.</div>'}</div>`);
+  $("#note").addEventListener("input",ev=>{ clearTimeout(noteT); noteT=setTimeout(()=>{ const v=ev.target.value.trim(); if(v) store.notes[id]=v; else delete store.notes[id]; persist(); renderList(); renderSaved(); toast("Note saved"); },500); });
+}
+function openProvider(id){
+  const p=pById(id); if(!p) return;
+  openDrawer(`<div class="dhead"><div><h2 style="font-size:21px">${esc(p.name)}</h2><p class="sub">${esc(p.cat)}</p></div><button class="btn ghost small" data-close>Close</button></div>
+  <p>${esc(p.desc)}</p><p>${ext(p.url,"Website")}</p>
+  <h3>GCC clients with public proof</h3><div class="tl">${p.eng.length?p.eng.map(x=>`<div>${x.gcc?`<button class="link" data-open-g="${x.gcc}">${esc(x.client)}</button>`:`<b>${esc(x.client)}</b>`}${x.year?` <span class="sub">(${x.year})</span>`:""} <span class="pill e-${x.level}">${LEVEL_LABEL[x.level]}</span><br>${esc(x.type)}. ${esc(x.detail)}<br>${ext(x.url,"Read the source")}</div>`).join(""):'<div class="sub">None found. This provider may have GCC clients, but none is named in public sources.</div>'}</div>`);
+}
+
+// ---------- add a company by hand ----------
+function openAddForm(){
+  openDrawer(`<div class="dhead"><h2 style="font-size:21px">Add a company</h2><button class="btn ghost small" data-close>Close</button></div>
+  <form class="fm" id="addForm">
+    <label>Company name *<input type="text" id="fName" required placeholder="For example: Acme Bank"></label>
+    <label>Based in (country)<input type="text" id="fHq" placeholder="For example: United States"></label>
+    <label>Industry<input type="text" id="fSec" list="secList" placeholder="For example: Banking and finance"><datalist id="secList">${[...new Set(GCCS.map(g=>g.sector).filter(Boolean))].map(s=>`<option value="${esc(s)}">`).join("")}</datalist></label>
+    <label>City in India *<input type="text" id="fCityIn" required list="cityListDl" placeholder="For example: Pune"><datalist id="cityListDl">${[...new Set(GCCS.flatMap(g=>g.cities))].sort().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></label>
+    <label>India staff<input type="number" id="fStaff" min="0" placeholder="Leave empty if unknown"></label>
+    <label>Status<select id="fSt"><option value="entrant">New in 2025–26</option><option value="operating">Running</option><option value="reported">Reported, not confirmed</option></select></label>
+    <label>Source link<input type="url" id="fSrc" placeholder="https://…"></label>
+    <div class="filters"><button class="btn" type="submit">Add company</button><span class="note">Saved in this browser.</span></div>
+  </form>`);
+  $("#fName").focus();
+  $("#addForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const name=$("#fName").value.trim(), city=$("#fCityIn").value.trim(); if(!name||!city) return;
+    const dupe=resolve([name]); if(dupe&&dupe.score>=.9){ toast(`${dupe.g.name} is already in the list`); openGcc(dupe.g.id); return; }
+    const src=$("#fSrc").value.trim();
+    const g={id:nextId("G",GCCS),name,parent:name,hq:$("#fHq").value.trim()||"Not stated",sector:$("#fSec").value.trim(),entity:null,cities:[cityKey(city)],
+      headcount:+$("#fStaff").value||null,hcType:$("#fStaff").value?"press":null,hcYear:$("#fStaff").value?2026:null,hcNote:$("#fStaff").value?"Entered by you":null,
+      est:"",funcs:[],status:$("#fSt").value,sources:[{url:src||null,title:src?"Source you added":"Added by you",date:"2026-10-26"}]};
+    GCCS.push(g); store.added.gccs.push(g); persist(); freshIds.add(g.id);
+    refreshAll(); toast(`${name} added`); openGcc(g.id);
+  });
+}
+$("#addCo").onclick=openAddForm;
+
+// ---------- news & alerts ----------
+const WHY={
+ "Opened a new GCC":{"Office space":"Needs a long-term office within 6–12 months.","Recruiting":"Leaders and first hires come next.","Payroll":"May pay early staff through a payroll partner.","Legal and tax":"Company setup and approvals ahead.","Setup advice":"Still choosing how to run the centre."},
+ "New GCC, reported":{"Office space":"Not confirmed yet. Worth a call, not a chase.","Recruiting":"A senior hire would confirm it.","Payroll":"If true, early hiring is likely.","Legal and tax":"A company filing would confirm it.","Setup advice":"Earliest stage, if confirmed."},
+ "Expanded":{"Office space":"Needs more floors or a second site.","Recruiting":"Many new roles to fill.","Payroll":"Payroll is growing.","Legal and tax":"New registrations if it is a new city.","Setup advice":"Planning across several cities."},
+ "Signed an office lease":{"Office space":"This deal is done; watch for fit-out and the next site.","Recruiting":"Hiring follows the new space.","Payroll":"Headcount will grow.","Legal and tax":"Lease and incentive paperwork.","Setup advice":"Space is set; operating plans next."},
+ "Closed or merged a centre":{"Office space":"Space being given up or moved.","Recruiting":"Staff moving or leaving: talent available.","Payroll":"Exits and transfers to process.","Legal and tax":"Closure and transfer work.","Setup advice":"The company is rethinking its India footprint."},
+ "Sold its GCC to an IT firm":{"Office space":"Space moves to the buyer.","Recruiting":"The buyer now does the hiring.","Payroll":"Staff move to a new employer.","Legal and tax":"Business and staff transfer work.","Setup advice":"A sign others in this sector may outsource too."}
+};
+const ALERT_CITIES=["Bengaluru","Hyderabad","Pune","Chennai","Delhi NCR","Mumbai","Coimbatore","Ahmedabad"];
+function renderSignals(){
+  const a=store.alerts;
+  $("#sigCats").innerHTML=CATS.map(c=>`<button class="chip" aria-pressed="${c===a.cat}" data-c="${esc(c)}">${esc(c)}</button>`).join("");
+  $("#myCities").innerHTML=ALERT_CITIES.map(c=>`<button class="chip" aria-pressed="${a.cities.includes(c)}" data-mc="${esc(c)}">${esc(c)}</button>`).join("");
+  $("#onlyMine").setAttribute("aria-pressed",a.only);
+  const t=$("#sigType").value;
+  const list=EVENTS.filter(e=>(!t||e.type===t)&&(!a.only||!a.cities.length||e.cities.some(c=>a.cities.includes(cityGroup(c)))));
+  $("#feed").innerHTML=list.map(e=>{const why=(WHY[e.type]||{})[a.cat]||""; const unread=!store.seen.includes(e.id);
+    return `<article class="card${freshIds.has(e.id)?" fresh":""}"><div class="top"><div><span class="sub">${esc(e.date)} · ${esc(e.cityRaw)}</span> ${unread?'<span class="pill unread">New</span>':""}<h3 style="font-size:16px">${esc(e.company)}: ${esc(e.type.toLowerCase())}</h3></div><div class="filters"><button class="star" data-star="${e.gcc}" aria-pressed="${isSaved(e.gcc)}" aria-label="Save company">★</button><button class="btn ghost small" data-open-g="${esc(e.gcc)}">View company</button></div></div>
+    <p>${esc(e.detail)}</p>${why?`<p class="why"><b>For ${esc(a.cat.toLowerCase())}:</b> ${esc(why)}</p>`:""}<p class="sub">${e.url?ext(e.url,"Read the source"):"From a pasted article"}</p></article>`}).join("") || '<div class="empty">No news matches your alerts. Add more cities or turn off “Show only my cities”.</div>';
+}
+$("#sigCats").addEventListener("click",e=>{const b=e.target.closest("[data-c]"); if(b){store.alerts.cat=b.dataset.c;persist();renderSignals()}});
+$("#myCities").addEventListener("click",e=>{const b=e.target.closest("[data-mc]"); if(!b) return; const c=b.dataset.mc, l=store.alerts.cities; store.alerts.cities=l.includes(c)?l.filter(x=>x!==c):[...l,c]; persist(); renderSignals();});
+$("#onlyMine").onclick=()=>{ store.alerts.only=!store.alerts.only; if(store.alerts.only&&!store.alerts.cities.length) toast("Pick at least one city"); persist(); renderSignals(); };
+$("#sigType").addEventListener("input",renderSignals);
+
+// ---------- providers ----------
+let provCat="", provSort={key:"best",dir:-1};
+const rank={documented:3,reported:2,self:1};
+const best=p=>p.eng.reduce((a,x)=>Math.max(a,rank[x.level]),0);
+const bestKey=p=>["","self","reported","documented"][best(p)];
+const pSortVal={name:p=>p.name.toLowerCase(),cat:p=>p.cat,n:p=>p.eng.length,best:p=>best(p)*100+p.eng.length};
+function filteredProviders(){
+  const q=$("#pq").value.trim().toLowerCase();
+  const rows=PROVIDERS.filter(p=>(!provCat||p.cat===provCat)&&(!q||[p.name,p.cat,p.desc,...p.eng.map(x=>x.client)].join(" ").toLowerCase().includes(q)));
+  const f=pSortVal[provSort.key]; rows.sort((a,b)=>{const x=f(a),y=f(b); return (x>y?1:x<y?-1:0)*provSort.dir;});
+  return rows;
+}
+function renderProviders(){
+  const withEng=PROVIDERS.filter(p=>p.eng.length).length;
+  $("#provKpis").innerHTML=[[PROVIDERS.length,"providers checked"],[withEng,"with a GCC client on public record"],[PROVIDERS.length-withEng,"with none we could find"]].map(([v,l])=>`<div class="kpi" style="cursor:default"><span class="v">${v}</span><span class="l">${l}</span></div>`).join("");
+  $("#provCats").innerHTML=["",...CATS].map(c=>`<button class="chip" aria-pressed="${c===provCat}" data-c="${esc(c)}">${c?esc(c):"All"}</button>`).join("");
+  document.querySelectorAll("th[data-psort]").forEach(th=>{ th.style.cursor="pointer"; th.querySelector(".arrow")?.remove(); if(th.dataset.psort===provSort.key) th.insertAdjacentHTML("beforeend",`<span class="arrow">${provSort.dir>0?"▲":"▼"}</span>`); });
+  $("#provBody").innerHTML=filteredProviders().map(p=>`<tr data-p="${p.id}"><td><b>${esc(p.name)}</b></td><td>${esc(p.cat)}</td><td>${p.eng.length?p.eng.map(x=>esc(x.client)).join(", "):'<span class="sub">none found</span>'}</td><td>${p.eng.length?`<span class="pill e-${bestKey(p)}">${LEVEL_LABEL[bestKey(p)]}</span>`:""}</td></tr>`).join("")||'<tr><td colspan="4"><div class="empty">No provider matches.</div></td></tr>';
+}
+$("#provCats").addEventListener("click",e=>{const b=e.target.closest("[data-c]"); if(b){provCat=b.dataset.c;renderProviders()}});
+$("#pq").addEventListener("input",renderProviders);
+document.querySelectorAll("th[data-psort]").forEach(th=>th.addEventListener("click",()=>{ const k=th.dataset.psort; provSort={key:k,dir:provSort.key===k?-provSort.dir:(k==="name"||k==="cat"?1:-1)}; renderProviders(); }));
+$("#provBody").addEventListener("click",e=>{const r=e.target.closest("tr[data-p]"); if(r) openProvider(r.dataset.p)});
+
+// ---------- city planner ----------
+let tier2=false, lastPlan=null, selCity=null, cmp=[];
+function rentSupport(c,hc,annualRent,sqft){
+  const r=c.rule;
+  if(r.minHead&&hc<r.minHead) return {amt:0,note:`Needs ${r.minHead}+ staff`};
+  if(r.kind==="pct") return {amt:Math.min(annualRent*r.pct,r.capCr*1e7)};
+  if(r.kind==="haryana") return {amt:Math.min(annualRent*.75*.5,Math.min(.75e7*hc/100,15e7))};
+  if(r.kind==="gujarat") return {amt:Math.min(Math.min(c.rent,50)*sqft*12*.15,20e7)};
+  return {amt:0,note:"None"};
+}
+function plan(){
+  const costW=+$("#pPri").value/100, hc=Math.max(10,+$("#pHead").value||300), seat=100;
+  const tal=c=>c.talent??TIER2_TALENT/5;
+  const maxT=Math.log(Math.max(...CITIES.map(tal))), minT=Math.log(TIER2_TALENT/5);
+  const rents=CITIES.map(c=>c.rent), maxR=Math.max(...rents), minR=Math.min(...rents);
+  const maxE=Math.max(...CITIES.map(c=>c.gccs||0));
+  return CITIES.map(c=>{
+    const talent=(Math.log(tal(c))-minT)/(maxT-minT||1), cost=(maxR-c.rent)/(maxR-minR||1), eco=(c.gccs||20)/maxE;
+    const sqft=hc*seat, annualRent=sqft*c.rent*12, sup=rentSupport(c,hc,annualRent,sqft);
+    const score=Math.round((talent*(1-costW)*.55+cost*costW*.55+eco*.3+(hc>1000?talent:1)*.15)*100);
+    const peers=GCCS.filter(g=>g.cities.some(x=>c.match.includes(x)));
+    return {c,score,annualRent,sup,peers,hc};
+  }).sort((a,b)=>b.score-a.score);
+}
+function pickCity(name){ selCity=name; renderPlanner(); $("#briefOut").innerHTML='<p class="note">Click “Write summary” for a note on this city.</p>'; }
+function renderPlanner(){
+  const v=+$("#pPri").value; $("#pPriL").textContent=v<35?"More talent":v>65?"Lower cost":"Both equally";
+  $("#pTier2").setAttribute("aria-pressed",tier2);
+  const all=plan(), ranked=all.filter(r=>tier2||r.c.tier===1);
+  const sel=all.find(r=>r.c.name===selCity)||ranked[0];
+  lastPlan=[sel,...ranked.filter(r=>r!==sel)];
+  fillSelect($("#pCity"),"Choose…",CITIES.map(c=>c.name)); $("#pCity").value=sel.c.name;
+  const shown=ranked.slice(0,6); if(!shown.includes(sel)) shown.push(sel);
+  $("#cityList").innerHTML=shown.map(r=>`<div class="city${r===sel?" sel":""}" role="button" tabindex="0" aria-pressed="${r===sel}" data-city="${esc(r.c.name)}"><div class="rank">${ranked.indexOf(r)+1||"–"}</div>
+    <div><b style="font-size:16px">${esc(r.c.name)}</b> <span class="sub">${esc(r.c.state)} · fit ${r.score}/100</span>${r===sel?' <span class="pill s-operating">Selected</span>':""}
+      <div class="sub">${r.c.talent?`${fmt(r.c.talent*1000)}+ people work in GCCs here`:"Smaller talent pool"} · ${r.peers.length} companies from our list</div>
+      <div class="money"><div><span>Office rent</span><b>₹${r.c.rent}</b>/sq ft/mo</div><div><span>Your year-one rent</span><b>${cr(r.annualRent)}</b></div><div><span>State rent support</span><b>${r.sup.amt?cr(r.sup.amt)+"/yr":esc(r.sup.note)}</b></div></div>
+      <p class="sub" style="margin-top:6px">${esc(r.c.rule.text)} ${ext(r.c.rentUrl,"Rent source")}</p></div>
+    <div class="cmp"><button class="chip" data-cmp="${esc(r.c.name)}" aria-pressed="${cmp.includes(r.c.name)}">${cmp.includes(r.c.name)?"✓ Comparing":"Compare"}</button></div></div>`).join("");
+  $("#briefCity").textContent=sel.c.name;
+  $("#peerHead").textContent=`Companies already in ${sel.c.name} (${sel.peers.length})`;
+  $("#peerList").innerHTML=sel.peers.slice(0,8).map(g=>`<div class="card"><div class="top"><div><b>${esc(g.name)}</b> ${statusPill(g.status)}<div class="sub">${esc(g.hq)}${g.headcount?" · "+fmt(g.headcount)+" staff":""}</div></div><button class="btn ghost small" data-open-g="${g.id}">View</button></div></div>`).join("")||'<div class="empty">None from our list yet.</div>';
+  // comparison table
+  const rows=cmp.map(n=>all.find(r=>r.c.name===n)).filter(Boolean);
+  $("#compareBox").hidden=!rows.length;
+  if(rows.length){
+    const line=(label,f)=>`<tr><td class="sub">${label}</td>${rows.map(r=>`<td>${f(r)}</td>`).join("")}</tr>`;
+    $("#compare").innerHTML=`<thead><tr><th></th>${rows.map(r=>`<th>${esc(r.c.name)}</th>`).join("")}</tr></thead><tbody>
+      ${line("Fit score",r=>`<b>${r.score}/100</b>`)}
+      ${line("Office rent",r=>`₹${r.c.rent}/sq ft/month`)}
+      ${line("Year-one rent",r=>cr(r.annualRent))}
+      ${line("State rent support",r=>r.sup.amt?cr(r.sup.amt)+"/yr":esc(r.sup.note))}
+      ${line("Rent after support",r=>`<b>${cr(r.annualRent-r.sup.amt)}</b>`)}
+      ${line("People in GCCs",r=>r.c.talent?fmt(r.c.talent*1000)+"+":"Not reported")}
+      ${line("Companies from our list",r=>r.peers.length)}
+      ${line("State",r=>esc(r.c.state))}</tbody>`;
+  }
+}
+$("#pTier2").onclick=()=>{tier2=!tier2;renderPlanner()};
+["#pPri","#pHead"].forEach(s=>$(s).addEventListener("input",renderPlanner));
+$("#pCity").addEventListener("input",()=>{ if($("#pCity").value) pickCity($("#pCity").value); });
+$("#cityList").addEventListener("click",e=>{
+  if(e.target.closest("a")) return;
+  const c=e.target.closest("[data-cmp]");
+  if(c){ const n=c.dataset.cmp; if(cmp.includes(n)) cmp=cmp.filter(x=>x!==n); else if(cmp.length<3) cmp.push(n); else return toast("Compare up to 3 cities"); renderPlanner(); return; }
+  const d=e.target.closest("[data-city]"); if(d) pickCity(d.dataset.city);
+});
+$("#cityList").addEventListener("keydown",e=>{ const c=e.target.closest("[data-city]"); if(c&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); pickCity(c.dataset.city); } });
+$("#clearCmp").onclick=()=>{cmp=[];renderPlanner()};
+function renderPolicies(){
+  const q=$("#polQ").value.trim().toLowerCase();
+  const rows=POLICIES.filter(p=>!q||[p.state,p.policy,...p.inc].join(" ").toLowerCase().includes(q));
+  $("#polBody").innerHTML=rows.map(p=>`<tr><td><b>${esc(p.state)}</b></td><td>${esc(p.policy)}</td><td><ul>${p.inc.map(i=>`<li>${esc(i)}</li>`).join("")}</ul></td><td>${ext(p.url,p.src)}</td></tr>`).join("")||'<tr><td colspan="4" class="sub">No match.</td></tr>';
+}
+$("#polQ").addEventListener("input",renderPolicies);
+
+// ---------- my list ----------
+let resetArmed=false;
+function renderSaved(){
+  const rows=store.saved.map(gById).filter(Boolean);
+  $("#savedBox").innerHTML=rows.length?`<div class="panel scroll" style="padding:4px 6px"><table><thead><tr><th style="width:36px"></th><th>Company</th><th>Cities</th><th>Status</th><th>My note</th></tr></thead><tbody class="click" id="savedBody">${rows.map(g=>`<tr data-g="${g.id}"><td><button class="star" data-star="${g.id}" aria-pressed="true" aria-label="Remove ${esc(g.name)}">★</button></td><td><b>${esc(g.name)}</b><div class="sub">${esc(g.sector)}</div></td><td>${g.cities.map(esc).join(", ")}</td><td>${statusPill(g.status)}</td><td>${store.notes[g.id]?esc(store.notes[g.id]):'<span class="sub">Click to add a note</span>'}</td></tr>`).join("")}</tbody></table></div>`
+    :'<div class="empty">Your list is empty. Click ☆ next to any company in Companies or News to save it here.</div>';
+  $("#savedBody")?.addEventListener("click",e=>{ if(e.target.closest("[data-star]")) return; const r=e.target.closest("tr[data-g]"); if(r) openGcc(r.dataset.g); });
+}
+$("#resetAll").onclick=()=>{
+  if(!resetArmed){ resetArmed=true; $("#resetAll").textContent="Click again to confirm"; setTimeout(()=>{resetArmed=false;$("#resetAll").textContent="Clear all my changes"},4000); return; }
+  store=BLANK(); persist(); location.reload();
+};
+
+// ---------- AI (Claude, through the page's sample capability) with plain fallbacks ----------
+let sample=null;
+(window.claude?.use?window.claude.use("sample"):Promise.resolve(null)).then(s=>{
+  sample=s; $("#aiBadge").textContent=s?"AI on":"AI off · basic mode"; $("#aiBadge").classList.toggle("on",!!s);
+}).catch(()=>{$("#aiBadge").textContent="AI off · basic mode"});
+const errCopy=c=>({not_granted:"AI was not allowed, so basic mode was used.",rate_limited:"Too many requests. Try again in a minute.",session_expired:"Sign in to Claude again, then retry.",refused:"The AI declined this text.",invalid_json:"The AI reply could not be read, so basic mode was used.",prompt_too_large:"That text is too long. Paste a shorter part."}[c]||"The AI could not finish, so basic mode was used.");
+function snapshot(){
+  const G=GCCS.map(g=>[g.id,g.name,g.hq,g.sector,STATUS[g.status],g.cities.join("/"),g.headcount?g.headcount+" staff ("+(WHO[g.hcType]||"reported")+")":"staff not public"].join("|")).join("\n");
+  const E=EVENTS.map(e=>[e.id,e.date,e.gcc,e.company,e.type,e.cityRaw,e.detail].join("|")).join("\n");
+  const P=PROVIDERS.map(p=>[p.id,p.name,p.cat,p.eng.length?p.eng.map(x=>`${x.client}${x.gcc?" "+x.gcc:""}: ${x.type} (${LEVEL_LABEL[x.level]})`).join("; "):"no GCC client with public proof"].join("|")).join("\n");
+  const C=CITIES.map(c=>[c.name,c.state,"rent ₹"+c.rent+"/sqft/month","GCC talent "+(c.talent?c.talent+"K":"n/a"),c.rule.text].join("|")).join("\n");
+  const S=POLICIES.map(p=>[p.state,p.policy,p.inc.join("; ")].join("|")).join("\n");
+  return `TODAY: 2026-10-26\nCOMPANIES (id|name|based in|industry|status|cities|India staff)\n${G}\n\nNEWS (id|date|company id|company|what happened|city|detail)\n${E}\n\nPROVIDERS (id|name|type|GCC clients with proof)\n${P}\n\nCITIES\n${C}\n\nSTATE POLICIES\n${S}`;
+}
+function renderMd(t){
+  let h=esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\[((?:[GPE]\d+)(?:\s*,\s*[GPE]\d+)*)\]/g,(m,ids)=>ids.split(/\s*,\s*/).map(id=>`<button class="cite" data-cite="${id}">${id}</button>`).join(" "));
+  let out="",inList=false;
+  for(const l of h.split("\n")){const m=l.match(/^\s*[-*•]\s+(.*)/);
+    if(m){if(!inList){out+="<ul>";inList=true}out+=`<li>${m[1]}</li>`}
+    else{if(inList){out+="</ul>";inList=false} const hd=l.match(/^#+\s+(.*)/); out+=hd?`<h3 style="margin-top:10px">${hd[1]}</h3>`:l.trim()?`<p style="margin:6px 0">${l}</p>`:""}}
+  return out+(inList?"</ul>":"");
+}
+function onCite(e){const b=e.target.closest("[data-cite]"); if(!b) return; const id=b.dataset.cite;
+  if(id[0]==="G") openGcc(id); else if(id[0]==="P") openProvider(id); else {const ev=EVENTS.find(x=>x.id===id); if(ev) openGcc(ev.gcc)}}
+$("#askOut").addEventListener("click",onCite); $("#briefOut").addEventListener("click",onCite);
+
+const ASK_SAMPLES=["Which companies opened a GCC in Hyderabad?","Which GCCs were sold to IT firms?","Which banks have GCCs in India?","Which providers have official proof of GCC work?"];
+$("#askSamples").innerHTML=ASK_SAMPLES.map(q=>`<button class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+$("#askSamples").addEventListener("click",e=>{const b=e.target.closest("[data-q]"); if(b){$("#askQ").value=b.dataset.q; ask()}});
+let askCtl=null;
+$("#askStop").onclick=()=>askCtl?.abort();
+$("#askBtn").onclick=ask;
+$("#askQ").addEventListener("keydown",e=>{if(e.key==="Enter") ask()});
+const SYN={bank:["banking","bfsi","financial","bank"],banks:["banking","bfsi","financial","bank"],sold:["sold"],opened:["opened","new"],official:["official"]};
+function basicAnswer(q){
+  const words=q.toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>2&&!/^(which|what|who|have|has|the|and|for|with|from|india|gcc|gccs|companies|company|are|does|did|their|that|this|work|proof)$/.test(w));
+  const terms=[...new Set(words.flatMap(w=>SYN[w]||[w.replace(/s$/,"")]))];
+  if(!terms.length) return '<p class="note">Try a question with a city, industry or company name.</p>';
+  const score=t=>terms.filter(w=>t.includes(w)).length;
+  const ev=EVENTS.map(e=>({e,s:score([e.company,e.type,e.cityRaw].join(" ").toLowerCase())})).filter(x=>x.s).sort((a,b)=>b.s-a.s);
+  const gs=GCCS.map(g=>({g,s:score([g.name,g.sector,g.hq,STATUS[g.status],...g.cities].join(" ").toLowerCase())})).filter(x=>x.s).sort((a,b)=>b.s-a.s);
+  const ps=PROVIDERS.filter(p=>p.eng.length).map(p=>({p,s:score([p.name,p.cat,...p.eng.map(x=>x.client+" "+LEVEL_LABEL[x.level])].join(" ").toLowerCase())})).filter(x=>x.s).sort((a,b)=>b.s-a.s);
+  const top=Math.max(ev[0]?.s||0,gs[0]?.s||0,ps[0]?.s||0);
+  if(!top) return '<p class="note">No matching records. Try a city (Hyderabad), an industry (banking) or a company name.</p>';
+  let h='<p class="note">Basic mode (AI is off): the records that best match your words.</p>';
+  if(ev[0]?.s===top) h+=`<h3 style="margin-top:8px">News</h3><ul>${ev.filter(x=>x.s===top).slice(0,8).map(({e})=>`<li><b>${esc(e.company)}</b>: ${esc(e.type.toLowerCase())}, ${esc(e.cityRaw)} (${esc(e.date)}) <button class="cite" data-cite="${e.id}">${e.id}</button></li>`).join("")}</ul>`;
+  if(gs[0]?.s===top) h+=`<h3 style="margin-top:8px">Companies</h3><ul>${gs.filter(x=>x.s===top).slice(0,10).map(({g})=>`<li><b>${esc(g.name)}</b>, ${g.cities.map(esc).join(", ")} <button class="cite" data-cite="${g.id}">${g.id}</button></li>`).join("")}</ul>`;
+  if(ps[0]?.s===top) h+=`<h3 style="margin-top:8px">Providers</h3><ul>${ps.filter(x=>x.s===top).slice(0,8).map(({p})=>`<li><b>${esc(p.name)}</b>: ${p.eng.map(x=>esc(x.client)).join(", ")} <button class="cite" data-cite="${p.id}">${p.id}</button></li>`).join("")}</ul>`;
+  return h;
+}
+async function ask(){
+  const q=$("#askQ").value.trim(); if(!q) return;
+  if(!sample){ $("#askOut").innerHTML=basicAnswer(q); return; }
+  askCtl=new AbortController(); $("#askBtn").disabled=true; $("#askStop").hidden=false;
+  $("#askOut").innerHTML='<p class="note">Thinking… (the first time, Claude may ask you to allow this page)</p>';
+  const prompt=`You answer questions about Global Capability Centres (GCCs) in India using ONLY the data below.
+Rules: cite each record you use by its id in square brackets, one per bracket, like [G4] or [E2] or [P3]. If the data does not answer the question, say so plainly. Use simple words. At most 150 words. Short bullets if useful. No preamble.
+
+DATA
+${snapshot()}
+
+QUESTION: ${q}`;
+  try{ await sample(prompt,{signal:askCtl.signal,cache:false,onText:({text})=>{$("#askOut").innerHTML=renderMd(text)}}) }
+  catch(e){ if(e.code==="cancelled") $("#askOut").innerHTML=e.text?renderMd(e.text):'<p class="note">Stopped.</p>'; else { if(e.code==="not_granted") sample=null; $("#askOut").innerHTML=`<p class="err">${esc(errCopy(e.code))}</p>`+basicAnswer(q);} }
+  finally{ $("#askBtn").disabled=false; $("#askStop").hidden=true }
+}
+function basicBrief(){
+  const [a,b,c]=lastPlan; const pol=POLICIES.find(p=>p.state===a.c.state);
+  return `<p class="note">Basic mode: written from the planner results without AI.</p>
+  <h3>Recommendation</h3><p><b>${esc(a.c.name)}</b> (${esc(a.c.state)}). Alternatives: ${esc(b.c.name)} and ${esc(c.c.name)}.</p>
+  <h3>Why</h3><ul><li>${a.c.talent?`${fmt(a.c.talent*1000)}+ people already work in GCCs there.`:"Lower costs than the big cities."}</li><li>Rent is about ₹${a.c.rent} per sq ft a month: about ${cr(a.annualRent)} in year one for ${fmt(a.hc)} people.</li><li>${a.peers.length} companies from our list are already there${a.peers.length?`, including ${a.peers.slice(0,3).map(g=>esc(g.name)).join(", ")}`:""}.</li></ul>
+  <h3>Incentives</h3><p>${esc(a.c.rule.text)}${pol?` Also check: ${esc(pol.inc[0])}.`:""}</p>
+  <h3>Next steps</h3><ul><li>Get rent quotes from two brokers.</li><li>Confirm policy conditions with the state’s investment office.</li><li>Shortlist partners with official proof in the Providers tab.</li></ul>`;
+}
+$("#brief").onclick=async()=>{
+  if(!lastPlan) return;
+  if(!sample){ $("#briefOut").innerHTML=basicBrief(); return; }
+  const b=$("#brief"); b.disabled=true; $("#briefOut").innerHTML='<p class="note">Writing… (the first time, Claude may ask you to allow this page)</p>';
+  const top=lastPlan.slice(0,3).map(r=>`${r.c.name} (rent ₹${r.c.rent}; year-one rent ${cr(r.annualRent)}; state rent support ${r.sup.amt?cr(r.sup.amt)+"/yr":r.sup.note}; companies already there ${r.peers.map(g=>g.id).join(",")})`).join("; ");
+  const prompt=`Write a short, plain-English note for a company planning a GCC in India with ${$("#pHead").value} people in year one, using ONLY the data below. The company is considering ${lastPlan[0].c.name} first.
+Cities: ${top}.
+Sections with 2–3 short bullets each: **Recommendation**, **Why**, **Incentives to apply for**, **Next steps**. Cite companies as [G..] and providers as [P..]. At most 180 words.
+
+DATA
+${snapshot()}`;
+  try{ await sample(prompt,{cache:false,onText:({text})=>{$("#briefOut").innerHTML=renderMd(text)}}) }
+  catch(e){ if(e.code==="not_granted") sample=null; $("#briefOut").innerHTML=`<p class="err">${esc(errCopy(e.code))}</p>`+basicBrief() }
+  finally{ b.disabled=false }
+};
+
+// ---------- add from news ----------
+const SAMPLE_KEYS=["ev-schwab-hyderabad","ev-bestbuy-tcs","ev-heineken-hyderabad","ev-target-manyata"];
+const SAMPLES=Object.fromEntries(SAMPLE_KEYS.map(k=>RAW.events.find(e=>e.id===k)).filter(Boolean).map(e=>[
+  e.company.split(" (")[0], `${e.sourceTitle||""}\n\n${e.company} (${e.hqCountry}). ${e.detail} Location: ${e.city}. Reported ${e.date}.\n\nSource: ${e.sourceUrl}`]));
+SAMPLES["Unrelated news"]=`The India Meteorological Department said the southwest monsoon is expected to be normal this year, with rainfall at about 105% of the long-period average.`;
+$("#samples").innerHTML=Object.keys(SAMPLES).map(k=>`<button class="chip" data-s="${esc(k)}">${esc(k)}</button>`).join("");
+const idleIngest=()=>{$("#ingestOut").innerHTML='<h2>Result</h2><div class="empty">Pick an example or paste an article, then click “Read the article”.</div>'};
+$("#samples").addEventListener("click",e=>{const b=e.target.closest("[data-s]"); if(b){$("#doc").value=SAMPLES[b.dataset.s]; idleIngest()}});
+const CITY_ALIAS={bangalore:"Bengaluru",bengaluru:"Bengaluru",hyderabad:"Hyderabad",pune:"Pune",chennai:"Chennai",gurugram:"Gurugram",gurgaon:"Gurugram",noida:"Noida",delhi:"Delhi",mumbai:"Mumbai",ahmedabad:"Ahmedabad","gift city":"GIFT City",kochi:"Kochi",coimbatore:"Coimbatore",kolkata:"Kolkata",jaipur:"Jaipur",indore:"Indore",visakhapatnam:"Visakhapatnam",mysuru:"Mysuru"};
+const cityOf=s=>{if(!s) return null; const l=s.toLowerCase(); for(const k in CITY_ALIAS) if(l.includes(k)) return CITY_ALIAS[k]; return s};
+function ruleExtract(t){
+  const l=t.toLowerCase(); const city=Object.keys(CITY_ALIAS).find(k=>l.includes(k));
+  const hc=(t.match(/~?([\d,]{3,6})\+?\s*(?:staff|professionals|people|employees|roles|jobs|hires|engineers)/i)||[])[1];
+  const sq=(t.match(/([\d.,]+)\s*(lakh|M|million)?\s*sq\.?\s*ft/i)||[]);
+  const area=sq[1]?Math.round(parseFloat(sq[1].replace(/,/g,""))*({lakh:1e5,m:1e6,million:1e6}[(sq[2]||"").toLowerCase()]||1)):null;
+  const known=GCCS.find(g=>norm(g.name).some(w=>w.length>3&&l.includes(w)));
+  const co=(t.match(/\n\n([^(\n]+?)\s*\(/)||t.match(/([A-Z][\w'’&.-]+(?:\s[A-Z][\w'’&.-]+){0,3})\s+(?:opens|opened|launches|launched|sets up|to set up|announces|leases|signs)/)||[])[1]||known?.name;
+  const type=/transferred|sold|acquire|divest/i.test(t)?"Sold its GCC to an IT firm":/lease|sq ft/i.test(t)&&!/first|new gcc|opened|opens/i.test(t)?"Signed an office lease":/expan|additional|second/i.test(t)?"Expanded":/gcc|capability|technology cent|innovation cent|tech hub/i.test(t)?"Opened a new GCC":null;
+  return {company:co?co.trim():null,eventType:co&&type?type:"Not relevant",city:city?CITY_ALIAS[city]:null,headcount:hc?+hc.replace(/,/g,""):null,areaSqft:area,summary:null,evidence:[]};
+}
+let pending=null;
+$("#extract").onclick=async()=>{
+  const t=$("#doc").value.trim(); if(!t){$("#extractNote").textContent="Paste an article first.";return}
+  const btn=$("#extract"); btn.disabled=true; $("#extractNote").textContent="";
+  $("#ingestOut").innerHTML=`<h2>Result</h2><p class="note">${sample?"The AI is reading the article… (the first time, Claude may ask you to allow this page)":"Reading in basic mode…"}</p>`;
+  let rec=null, via="basic mode";
+  if(sample){
+    const prompt=`Read this article about a company and India. Reply with ONLY one JSON object with these keys:
+{"company": the company's common name or null, "eventType": one of "Opened a new GCC","Expanded","Signed an office lease","Closed or merged a centre","Sold its GCC to an IT firm","Not relevant",
+ "city": Indian city or null, "headcount": number of staff planned or current, or null, "areaSqft": office size in sq ft as a number, or null,
+ "summary": one plain sentence of at most 25 words, "evidence": up to 3 short exact quotes from the article that prove the facts}
+A GCC is an office a global company opens in India to do its own work. If the article is not about a company opening, growing, moving or selling such a centre in India, use "Not relevant". Use only the article.
+
+ARTICLE:
+"""${t.slice(0,12000)}"""`;
+    try{ rec=await sample.json(prompt,{modelTier:"quick"}); via="AI" }
+    catch(e){ if(e.code==="not_granted") sample=null; $("#extractNote").textContent=errCopy(e.code); rec=null }
+  }
+  if(!rec||typeof rec!=="object") rec=ruleExtract(t);
+  rec.city=cityOf(rec.city);
+  pending={rec,match:resolve([rec.company].filter(Boolean)),via,src:(t.match(/https?:\/\/\S+/)||[])[0]||null};
+  renderIngest(); btn.disabled=false;
+};
+function renderIngest(){
+  const {rec,match,via}=pending;
+  if(rec.eventType==="Not relevant"||!rec.company){ $("#ingestOut").innerHTML=`<h2>Result</h2><div class="match new"><b>Nothing to add.</b> This article is not about a company opening, growing or selling an India centre.</div>`; return; }
+  const row=(k,v)=>v==null||v===""?"":`<dt>${k}</dt><dd>${esc(v)}</dd>`;
+  const newCity=rec.city&&match&&!match.g.cities.includes(rec.city);
+  $("#ingestOut").innerHTML=`<div class="head"><h2>What we found</h2><span class="pill ${via==="AI"?"s-operating":"e-self"}">read by ${esc(via)}</span></div>
+  <dl class="kv">${row("Company",rec.company)}${row("What happened",rec.eventType)}${row("City",rec.city)}${row("Staff",rec.headcount&&fmt(rec.headcount))}${row("Office size",rec.areaSqft&&fmt(rec.areaSqft)+" sq ft")}${row("In short",rec.summary)}</dl>
+  ${(rec.evidence||[]).length?`<h3>Proof from the article</h3>${rec.evidence.map(q=>`<blockquote>“${esc(q)}”</blockquote>`).join("")}`:""}
+  ${match?`<div class="match old"><b>Already in the list: ${esc(match.g.name)}.</b> Adding attaches this news to that company${newCity?` and adds ${esc(rec.city)} to its cities`:""}.</div>`:`<div class="match new"><b>New company.</b> Adding creates a new entry in the list.</div>`}
+  <div class="filters"><button class="btn" id="approve">Add to GCC Atlas</button><button class="btn ghost" id="discard">Discard</button></div>`;
+  $("#approve").onclick=approve; $("#discard").onclick=()=>{pending=null;$("#ingestOut").innerHTML='<h2>Result</h2><p class="note">Discarded. Nothing was added.</p>'};
+}
+function approve(){
+  const {rec,match,src}=pending; const city=rec.city||"Not stated";
+  let g=match?.g;
+  if(!g){
+    g={id:nextId("G",GCCS),name:rec.company,parent:rec.company,hq:"Not stated",sector:"",entity:null,cities:[city],headcount:null,hcType:null,hcYear:null,
+      hcNote:rec.headcount?`Planned staff in the article: ${fmt(rec.headcount)}`:null,est:"2026",funcs:[],status:"entrant",sources:[{url:src,title:"Added from a pasted article",date:"2026-10-26"}]};
+    GCCS.push(g); store.added.gccs.push(g);
+  } else if(rec.city&&!g.cities.includes(rec.city)){ g.cities.push(rec.city); store.added.cityAdds.push({gcc:g.id,city:rec.city}); }
+  const ev={id:nextId("E",EVENTS),company:g.name,hq:g.hq,type:rec.eventType,cityRaw:city,cities:[city],date:"2026-10-26",detail:rec.summary||"Added from a pasted article.",url:src,title:"Pasted article",gcc:g.id};
+  EVENTS.unshift(ev); store.added.events.push(ev); persist(); freshIds.add(g.id); freshIds.add(ev.id);
+  refreshAll(); toast("Added to GCC Atlas");
+  $("#ingestOut").innerHTML=`<h2>Result</h2><div class="match old"><b>Added.</b> ${esc(g.name)} now shows this news. It is highlighted in News &amp; alerts and Companies.</div>
+  <div class="filters"><button class="btn" data-go="new">See it in News</button><button class="btn ghost" data-open-g="${g.id}">View company</button></div>`;
+  pending=null;
+}
+
+// ---------- start ----------
+function refreshAll(){
+  const cities=[...new Set(GCCS.flatMap(g=>g.cities))].filter(c=>c&&c!=="Not stated").sort();
+  fillSelect($("#fCity"),"Any city",[...new Set(["Delhi NCR",...cities.map(cityGroup),...cities])].sort());
+  fillSelect($("#fSector"),"Any industry",[...new Set(GCCS.map(g=>g.sector).filter(Boolean))].sort());
+  fillSelect($("#sigType"),"Anything that happened",[...new Set(EVENTS.map(e=>e.type))]);
+  renderCounts(); renderDash(); renderList(); renderSignals(); renderProviders(); renderPolicies(); renderPlanner(); renderSaved();
+}
+refreshAll(); idleIngest();
+$("#doc").value=Object.values(SAMPLES)[0];
+show((location.hash||"").slice(1)||"dash");
+</script>
